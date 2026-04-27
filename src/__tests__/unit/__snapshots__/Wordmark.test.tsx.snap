@@ -1,0 +1,136 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Wordmark renders at size=lg 1`] = `
+<View
+  style={
+    {
+      "alignItems": "center",
+    }
+  }
+>
+  <Text
+    style={
+      [
+        {
+          "fontFamily": "Fraunces_700Bold",
+          "lineHeight": 38,
+        },
+        {
+          "color": "#101418",
+          "fontSize": 38,
+          "letterSpacing": 2.28,
+        },
+      ]
+    }
+  >
+    CULINAIRE
+  </Text>
+  <Text
+    style={
+      [
+        {
+          "color": "#B87840",
+          "fontFamily": "Caveat_600SemiBold",
+          "lineHeight": 30,
+        },
+        {
+          "fontSize": 30,
+          "marginTop": 2,
+        },
+      ]
+    }
+  >
+    Kitchen
+  </Text>
+</View>
+`;
+
+exports[`Wordmark renders at size=md 1`] = `
+<View
+  style={
+    {
+      "alignItems": "center",
+    }
+  }
+>
+  <Text
+    style={
+      [
+        {
+          "fontFamily": "Fraunces_700Bold",
+          "lineHeight": 38,
+        },
+        {
+          "color": "#101418",
+          "fontSize": 28.5,
+          "letterSpacing": 1.71,
+        },
+      ]
+    }
+  >
+    CULINAIRE
+  </Text>
+  <Text
+    style={
+      [
+        {
+          "color": "#B87840",
+          "fontFamily": "Caveat_600SemiBold",
+          "lineHeight": 30,
+        },
+        {
+          "fontSize": 22.5,
+          "marginTop": 1.5,
+        },
+      ]
+    }
+  >
+    Kitchen
+  </Text>
+</View>
+`;
+
+exports[`Wordmark renders at size=sm 1`] = `
+<View
+  style={
+    {
+      "alignItems": "center",
+    }
+  }
+>
+  <Text
+    style={
+      [
+        {
+          "fontFamily": "Fraunces_700Bold",
+          "lineHeight": 38,
+        },
+        {
+          "color": "#101418",
+          "fontSize": 20.900000000000002,
+          "letterSpacing": 1.254,
+        },
+      ]
+    }
+  >
+    CULINAIRE
+  </Text>
+  <Text
+    style={
+      [
+        {
+          "color": "#B87840",
+          "fontFamily": "Caveat_600SemiBold",
+          "lineHeight": 30,
+        },
+        {
+          "fontSize": 16.5,
+          "marginTop": 1.1,
+        },
+      ]
+    }
+  >
+    Kitchen
+  </Text>
+</View>
+`;

@@ -1,0 +1,73 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`BrandGlyph renders the icon-only crop when compact 1`] = `
+<ViewManagerAdapter_ExpoImage
+  accessibilityLabel="CulinAIre Kitchen"
+  containerViewRef={"[React.ref]"}
+  contentFit="contain"
+  contentPosition={
+    {
+      "left": "50%",
+      "top": "50%",
+    }
+  }
+  height={48}
+  nativeViewRef={"[React.ref]"}
+  onError={[Function]}
+  onLoad={[Function]}
+  onLoadStart={[Function]}
+  onProgress={[Function]}
+  placeholder={[]}
+  source={
+    [
+      {
+        "testUri": "../../../assets/brand/ck-logo-icon.png",
+      },
+    ]
+  }
+  style={
+    {
+      "height": 48,
+      "width": 48,
+    }
+  }
+  transition={null}
+  width={48}
+/>
+`;
+
+exports[`BrandGlyph renders the lockup image by default 1`] = `
+<ViewManagerAdapter_ExpoImage
+  accessibilityLabel="CulinAIre Kitchen"
+  containerViewRef={"[React.ref]"}
+  contentFit="contain"
+  contentPosition={
+    {
+      "left": "50%",
+      "top": "50%",
+    }
+  }
+  height={240}
+  nativeViewRef={"[React.ref]"}
+  onError={[Function]}
+  onLoad={[Function]}
+  onLoadStart={[Function]}
+  onProgress={[Function]}
+  placeholder={[]}
+  source={
+    [
+      {
+        "testUri": "../../../assets/brand/ck-logo.png",
+      },
+    ]
+  }
+  style={
+    {
+      "height": 240,
+      "width": 240,
+    }
+  }
+  transition={null}
+  width={240}
+/>
+`;
