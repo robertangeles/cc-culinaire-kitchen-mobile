@@ -139,12 +139,7 @@ export function ChatScreen() {
         onPressMore={() => setKebabOpen(true)}
       />
 
-      <ChatList
-        messages={messages}
-        modelReady={isModelActive}
-        onOpenSettings={() => router.push('/(tabs)/settings')}
-        onPressImage={(uri) => setPreviewUri(uri)}
-      />
+      <ChatList messages={messages} onPressImage={(uri) => setPreviewUri(uri)} />
 
       <ChatComposer
         onSend={onSend}

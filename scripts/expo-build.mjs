@@ -60,6 +60,11 @@ console.log(
 );
 console.log('');
 
+// On Windows, the bin is `expo.cmd` (a Windows batch wrapper). Node's
+// `spawn(cmd, args, { shell: false })` on Windows fails with EINVAL on
+// .cmd / .bat files since Windows requires a shell to execute them.
+// `shell: true` lets cmd.exe handle the .cmd correctly. On Linux/macOS
+// the bin is just `expo` (no shell needed, but `shell: true` works fine).
 const child = spawn(expoBin, args, {
   stdio: ['inherit', 'pipe', 'pipe'],
   env: {
@@ -71,7 +76,7 @@ const child = spawn(expoBin, args, {
     // Force color output even when piped through us.
     FORCE_COLOR: '1',
   },
-  shell: false,
+  shell: isWindows,
 });
 
 // Track time of last output line so the watchdog can detect silence.
