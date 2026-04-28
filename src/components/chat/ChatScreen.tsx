@@ -1,7 +1,9 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, palette, spacing, theme } from '@/constants/theme';
@@ -36,6 +38,25 @@ export function ChatScreen() {
   const { conversations, activeId, messages, setActive, newConversation, clearActive } =
     useConversation();
   const { send } = useAntoine();
+
+  // Keyboard avoidance lives at the screen level, not in ChatComposer. With
+  // edgeToEdgeEnabled: true (app.config.ts), Android's adjustResize is a no-op
+  // and KeyboardAvoidingView is unreliable. Translating only the composer
+  // (our previous attempt) made it overlap siblings above. Solution: lift
+  // the IME height to the root view as paddingBottom so flex re-layouts the
+  // entire chat area.
+  //
+  // CRITICAL: subtract the tab bar height. ChatScreen's bottom edge sits
+  // tabBar.height above the screen bottom (the (tabs) layout reserves that
+  // space). The keyboard rises from the screen bottom, so it only OVERLAPS
+  // ChatScreen by `max(0, keyboard.height - tabBar.height)`. Without the
+  // subtraction we double-count and a tabBar.height-sized gap appears
+  // between the composer and the keyboard top.
+  const keyboard = useAnimatedKeyboard();
+  const tabBarHeight = useBottomTabBarHeight();
+  const rootStyle = useAnimatedStyle(() => ({
+    paddingBottom: Math.max(0, keyboard.height.value - tabBarHeight),
+  }));
 
   const [kebabOpen, setKebabOpen] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -111,7 +132,7 @@ export function ChatScreen() {
   ];
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <Animated.View style={[styles.root, { paddingTop: insets.top }, rootStyle]}>
       <ChatHeader
         modelReady={isModelActive}
         onPressDownload={() => router.push('/(tabs)/settings')}
@@ -155,7 +176,7 @@ export function ChatScreen() {
           </Pressable>
         </Modal>
       ) : null}
-    </View>
+    </Animated.View>
   );
 }
 

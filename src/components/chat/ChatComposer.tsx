@@ -1,12 +1,5 @@
 import { useCallback, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { fonts, palette, radii, spacing, theme } from '@/constants/theme';
 
@@ -34,11 +27,11 @@ export function ChatComposer({
     setText('');
   }, [canSend, text, onSend]);
 
+  // Composer is presentational only. Keyboard avoidance lives at ChatScreen
+  // (parent) — the entire chat root view applies paddingBottom = keyboard
+  // height so flex re-layouts naturally. See ChatScreen.tsx for the rationale.
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.wrapper}
-    >
+    <View style={styles.wrapper}>
       <View style={styles.bar}>
         <Pressable
           onPress={onPressAttach}
@@ -81,7 +74,7 @@ export function ChatComposer({
           </Pressable>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
