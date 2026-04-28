@@ -31,7 +31,7 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const { login, googleSignIn, isLoading, error } = useAuth();
+  const { login, register, isLoading, error } = useAuth();
 
   const canSubmit = useMemo(
     () => email.includes('@') && password.length >= 6 && (mode === 'signin' || name.length > 0),
@@ -41,20 +41,27 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   const submit = async () => {
     if (!canSubmit) return;
     try {
+      if (mode === 'register') {
+        // Backend register doesn't auto-log-in. Register, then log in
+        // immediately. If the account requires email verification before
+        // login (RESEND_API_KEY configured server-side), the second call
+        // will throw EmailNotVerifiedError — Phase 5 routes to verify-email.
+        await register(name, email, password);
+      }
       await login(email, password);
       onAuthed();
     } catch {
-      // error surfaced via `error` from useAuth
+      // Phase 5 will pattern-match: MfaRequiredError → push /mfa,
+      // EmailNotVerifiedError → push /verify-email. For now, the message
+      // surfaces via `error` from useAuth — informative even if not yet routable.
     }
   };
 
   const google = async () => {
-    try {
-      await googleSignIn();
-      onAuthed();
-    } catch {
-      // surfaced via `error`
-    }
+    // Phase 3 wires the native @react-native-google-signin SDK to fetch an
+    // ID token and pass it to useAuth.googleSignIn(idToken). For now this
+    // is a no-op so the UI still renders; the button shows "coming soon"
+    // would be premature since Phase 3 lands shortly.
   };
 
   return (

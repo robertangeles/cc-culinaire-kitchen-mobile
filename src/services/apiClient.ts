@@ -26,6 +26,7 @@
  */
 import { API_BASE_URL } from '@/constants/config';
 import { useAuthStore } from '@/store/authStore';
+import type { AuthSession } from '@/types/auth';
 
 import { ApiError, AuthError, NetworkError } from './__errors__';
 
@@ -82,20 +83,12 @@ async function refreshAccessToken(): Promise<string> {
     throw new AuthError('Session expired. Please sign in again.');
   }
 
-  const json = (await res.json()) as {
-    user: { userId: number; userEmail: string; userName: string };
-    tokens: { accessToken: string; refreshToken: string };
-  };
+  const json = (await res.json()) as AuthSession;
 
   // Persist the new tokens. Refresh token is NOT rotated server-side
   // (same value comes back), but write-through anyway in case backend
   // ever changes that.
-  await store.setSession(
-    // Cast through unknown — the new authStore will accept the full AuthUser
-    // shape; for now Phase 1 doesn't change the store, Phase 4 does.
-    json.user as unknown as Parameters<typeof store.setSession>[0],
-    json.tokens.accessToken,
-  );
+  await store.setSession(json.user, json.tokens.accessToken, json.tokens.refreshToken);
 
   return json.tokens.accessToken;
 }

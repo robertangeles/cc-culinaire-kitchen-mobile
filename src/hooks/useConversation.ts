@@ -4,7 +4,9 @@ import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 
 export function useConversation() {
-  const userId = useAuthStore((s) => s.user?.id ?? null);
+  // Backend userId is `number`; local SQLite stores it as `text`. Coerce at
+  // the boundary so the on-device schema stays opaque to backend type changes.
+  const userId = useAuthStore((s) => (s.user ? String(s.user.userId) : null));
   const dbReady = useConversationStore((s) => s.dbReady);
   const conversations = useConversationStore((s) => s.conversations);
   const activeId = useConversationStore((s) => s.activeId);

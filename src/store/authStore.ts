@@ -2,20 +2,24 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { STORAGE_KEYS } from '@/constants/config';
-import type { User } from '@/types/auth';
+import type { AuthUser } from '@/types/auth';
 
 /**
- * Auth state. Phase 1 adds `refreshToken` so apiClient can do single-flight
- * 401-refresh-retry. The full Phase 4 work (rich AuthUser shape from web,
- * server-side revoke on signOut) builds on top of this skeleton.
+ * Auth state. Holds the full backend `AuthUser` shape (12 fields, see
+ * `src/types/auth.ts`) plus the access + refresh token pair.
+ *
+ * `refreshToken` is needed by `apiClient`'s single-flight 401-refresh-retry
+ * loop. `signOut` clears all SecureStore keys; the server-side refresh
+ * token revocation is performed by `useAuth.signOut` BEFORE calling this
+ * store action (so we still wipe local even if the network call fails).
  */
 interface AuthStore {
-  user: User | null;
+  user: AuthUser | null;
   token: string | null;
   refreshToken: string | null;
   isHydrated: boolean;
   hydrate: () => Promise<void>;
-  setSession: (user: User, token: string, refreshToken?: string | null) => Promise<void>;
+  setSession: (user: AuthUser, token: string, refreshToken?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -36,7 +40,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         set({
           token,
           refreshToken: refreshToken ?? null,
-          user: JSON.parse(userJson) as User,
+          user: JSON.parse(userJson) as AuthUser,
         });
       }
     } finally {

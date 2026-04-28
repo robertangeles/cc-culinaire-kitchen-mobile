@@ -32,7 +32,9 @@ function makeMessage(
 }
 
 export function useAntoine() {
-  const userId = useAuthStore((s) => s.user?.id ?? null);
+  // Backend userId is `number`; local SQLite stores it as `text`. Coerce at
+  // the boundary so the on-device schema stays opaque to backend type changes.
+  const userId = useAuthStore((s) => (s.user ? String(s.user.userId) : null));
   const isModelActive = useModelStore((s) => s.isActive);
   const activeId = useConversationStore((s) => s.activeId);
   const messages = useConversationStore((s) => (activeId ? (s.messages[activeId] ?? []) : []));
