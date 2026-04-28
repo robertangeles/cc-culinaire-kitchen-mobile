@@ -41,3 +41,21 @@ jest.mock('react-native-safe-area-context', () => {
     SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
   };
 });
+
+// @react-native-google-signin/google-signin is a native module — calling it
+// in jest crashes ("RNGoogleSignin is not a registered module"). Mock the
+// surface our code uses so tests can run pure-JS.
+jest.mock('@react-native-google-signin/google-signin', () => ({
+  GoogleSignin: {
+    configure: jest.fn(),
+    hasPlayServices: jest.fn(async () => true),
+    signIn: jest.fn(async () => ({ type: 'success', data: { idToken: 'mock-id-token' } })),
+    signOut: jest.fn(async () => undefined),
+  },
+  isErrorWithCode: () => false,
+  statusCodes: {
+    SIGN_IN_CANCELLED: 'SIGN_IN_CANCELLED',
+    IN_PROGRESS: 'IN_PROGRESS',
+    PLAY_SERVICES_NOT_AVAILABLE: 'PLAY_SERVICES_NOT_AVAILABLE',
+  },
+}));

@@ -25,8 +25,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
+import { configureGoogleSignIn } from '@/services/googleSignIn';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+
+// Configure Google Sign-In at module load (idempotent, safe to call before
+// any Google API call). Reads EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from config.
+configureGoogleSignIn();
 
 SplashScreen.preventAutoHideAsync();
 

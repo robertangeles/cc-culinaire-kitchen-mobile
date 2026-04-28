@@ -51,13 +51,20 @@ const config: ExpoConfig = {
     ],
     'expo-secure-store',
     'expo-sqlite',
+    // Native Google Sign-In. Auto-configures Android (build.gradle hooks
+    // for Google Play Services). The runtime SDK reads `webClientId` from
+    // `GoogleSignin.configure()` — see src/services/googleSignIn.ts.
+    '@react-native-google-signin/google-signin',
   ],
   experiments: {
     typedRoutes: true,
     reactCompiler: true,
   },
   extra: {
-    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://culinaire.kitchen',
+    // www host required: apex 301-redirects, fetch strips Authorization on
+    // cross-origin redirect AND drops POST body on POST -> GET conversion.
+    // See lessons.md "apex strips Bearer auth on GETs".
+    apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://www.culinaire.kitchen',
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
   },
 };

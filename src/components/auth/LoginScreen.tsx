@@ -19,6 +19,7 @@ import { TextField } from '@/components/ui/TextField';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { isEmailNotVerifiedError, isMfaRequiredError } from '@/services/__errors__';
+import { isGoogleSignInCancelled, signInWithGoogle } from '@/services/googleSignIn';
 
 type Mode = 'signin' | 'register';
 
@@ -34,7 +35,8 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const { login, register, isLoading, error } = useAuth();
+  const { login, register, googleSignIn, isLoading, error } = useAuth();
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
     () => email.includes('@') && password.length >= 6 && (mode === 'signin' || name.length > 0),
@@ -72,9 +74,27 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   };
 
   const google = async () => {
-    // Phase 3 wires the native @react-native-google-signin SDK to fetch an
-    // ID token and pass it to useAuth.googleSignIn(idToken). For now this
-    // is a no-op so the UI still renders.
+    setGoogleError(null);
+    try {
+      const { idToken } = await signInWithGoogle();
+      await googleSignIn(idToken);
+      onAuthed();
+    } catch (e) {
+      if (isGoogleSignInCancelled(e)) {
+        // Silent no-op — user backed out of the picker, no need for an error.
+        return;
+      }
+      if (isEmailNotVerifiedError(e)) {
+        // Theoretically possible if backend rejects unverified Google accounts —
+        // unusual but we route the same way as email/password sign-in.
+        router.push({
+          pathname: '/(auth)/verify-email',
+          params: { email: e.email },
+        });
+        return;
+      }
+      setGoogleError(e instanceof Error ? e.message : 'Google sign-in failed.');
+    }
   };
 
   return (
@@ -168,6 +188,7 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {googleError ? <Text style={styles.error}>{googleError}</Text> : null}
 
         <View style={styles.spacer} />
 
