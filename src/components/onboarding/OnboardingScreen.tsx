@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -10,7 +10,6 @@ import { useAuthStore } from '@/store/authStore';
 
 interface OnboardingScreenProps {
   onDownload: () => void;
-  onSkip: () => void;
 }
 
 interface PrivacyDotProps {
@@ -67,7 +66,7 @@ function DownloadIcon({ color }: { color: string }) {
   );
 }
 
-export function OnboardingScreen({ onDownload, onSkip }: OnboardingScreenProps) {
+export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const firstName = (user?.userName ?? user?.userEmail ?? 'chef').split(/[ @]/)[0] ?? 'chef';
@@ -112,16 +111,8 @@ export function OnboardingScreen({ onDownload, onSkip }: OnboardingScreenProps) 
 
       <View style={[styles.ctas, { paddingBottom: insets.bottom + spacing.s5 }]}>
         <CopperButton onPress={onDownload} leading={<DownloadIcon color={palette.textOnCopper} />}>
-          Download Antoine · 5.9 GB
+          Get Antoine · 5.9 GB
         </CopperButton>
-        <Pressable
-          onPress={onSkip}
-          accessibilityRole="button"
-          accessibilityLabel="Choose model later"
-          style={styles.skipBtn}
-        >
-          <Text style={styles.skip}>Choose later</Text>
-        </Pressable>
       </View>
     </View>
   );
