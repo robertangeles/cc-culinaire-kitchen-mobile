@@ -82,7 +82,10 @@ function main() {
 
   let currentSha;
   try {
-    currentSha = gh(`api repos/${WEB_REPO}/commits/main --jq .sha`);
+    // Avoid --jq: its single-quote argument doesn't survive cmd.exe (Windows
+    // pnpm spawns scripts through cmd which strips them). Parse JSON in Node.
+    const raw = gh(`api repos/${WEB_REPO}/commits/main`);
+    currentSha = JSON.parse(raw).sha;
   } catch (err) {
     console.error(`${COLOR.yellow}WARN: could not fetch web repo HEAD: ${err.message}${COLOR.reset}`);
     console.error(`${COLOR.yellow}  (gh CLI not installed? offline? not authenticated?)${COLOR.reset}`);
@@ -115,17 +118,17 @@ function main() {
   }
 
   // Compare pinned -> current and filter to auth-surface files.
-  let changedFilesRaw;
+  // Same Windows quoting issue as above — parse JSON in Node, not via --jq.
+  let changedFiles;
   try {
-    changedFilesRaw = gh(
-      `api repos/${WEB_REPO}/compare/${pinnedSha}...${currentSha} --jq '.files[].filename'`,
-    );
+    const raw = gh(`api repos/${WEB_REPO}/compare/${pinnedSha}...${currentSha}`);
+    const parsed = JSON.parse(raw);
+    changedFiles = (parsed.files ?? []).map((f) => f.filename).filter(Boolean);
   } catch (err) {
     console.error(`${COLOR.yellow}WARN: could not diff ${pinnedSha.slice(0, 7)}...${currentSha.slice(0, 7)}: ${err.message}${COLOR.reset}`);
     process.exit(2);
   }
 
-  const changedFiles = changedFilesRaw.split('\n').filter(Boolean);
   const authSurfaceChanges = changedFiles.filter((f) =>
     AUTH_SURFACE_PATTERNS.some((re) => re.test(f)),
   );
