@@ -678,3 +678,43 @@ to any test that asserts on `Eyebrow`, `cardBadgeText`, `dividerLabel`, etc.
 
 **Rule.** Tests assert against the JS string, not the rendered glyphs. If
 the visual matters, snapshot it.
+
+---
+
+## 2026-04-28 — Cross-repo drift detection (Phase 1.5)
+
+**Problem.** Mobile depends on the web backend's auth surface but the two
+repos have no compile-time link. If web renames a field (`userEmail` →
+`email`) or changes a status code (`200` for MFA → `202`), mobile builds
+clean and breaks at runtime in production. The risk grows during parallel
+dev between web and mobile.
+
+**Fix.** Two automated guardrails wired into the workflow:
+
+1. **`tasks/web-repo-pin.txt`** — last-verified web `main` SHA, checked
+   into git. `scripts/check-web-drift.mjs` diffs current web HEAD against
+   this pin and lists changes touching auth-surface paths
+   (`packages/server/src/{routes,controllers,services}/auth*`,
+   `db/schema/user*`, etc.). Wired into:
+   - `pnpm android` / `pnpm ios` — blocks builds on drift.
+   - `pnpm start` — warns but doesn't block dev iteration.
+   - `pnpm check:web` — manual.
+2. **`src/__tests__/contract/web-backend.contract.test.ts`** — hits the
+   live deployed backend and asserts shapes + status codes still match
+   `docs/architecture/web-backend-api.md`. Excluded from default
+   `pnpm test`. Run with `pnpm test:contract` before deploys, after
+   bumping the pin, and on a daily cron (when set up).
+
+Workflow when drift is detected:
+
+- Read the diff URL the script prints.
+- If mobile is unaffected, `pnpm check:web -- --bump` to advance the pin,
+  commit with a one-line note.
+- If mobile IS affected, update `docs/architecture/web-backend-api.md` +
+  `src/types/auth.ts` + `src/services/__errors__.ts` + relevant service
+  code, then `pnpm test:contract` to confirm, then bump the pin.
+
+**Rule.** Mobile is the consumer; web is the source of truth. Bump the
+pin only after `pnpm test:contract` is green. Never edit
+`tasks/web-repo-pin.txt` by hand without a corresponding doc/types
+update — that defeats the alarm.

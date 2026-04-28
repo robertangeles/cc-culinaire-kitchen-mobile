@@ -467,3 +467,58 @@ Bearer is checked first. Mobile should always use Bearer; never set cookies.
 - 2026-04-28 — Web W1 + hotfix W1.1 deployed; smoke test 5/5 passing
   against production. AuthUser shape, all auth endpoint paths +
   request/response shapes confirmed by reading source files.
+
+---
+
+## How to update this doc when web changes
+
+Mobile depends on the web backend's auth surface but has no compile-time
+link to it. Two automated guardrails catch drift; this section explains
+the manual review step that ties them together.
+
+### The two guardrails
+
+1. **`pnpm check:web`** — diff the current `main` SHA of the web repo
+   against `tasks/web-repo-pin.txt`. Lists any auth-surface files that
+   changed since we last verified. Runs automatically before
+   `pnpm android` / `pnpm ios` (blocking) and `pnpm start` (warn-only).
+2. **`pnpm test:contract`** — hits the live deployed backend and asserts
+   each consumed endpoint still returns the documented shape + status
+   code. Lives in `src/__tests__/contract/`. Excluded from the default
+   `pnpm test` run (network calls).
+
+### When `pnpm check:web` says "REVIEW NEEDED"
+
+1. Read the diff URL it printed.
+2. For each changed file, decide: does this affect mobile?
+   - `routes/auth*` — new route mount path or HTTP method change
+   - `controllers/auth*` — request/response body shape change
+   - `services/authService*` — `AuthUser` shape, error codes, JWT payload
+   - `services/credentialService*` — Google OAuth audience verification
+   - `db/schema/user*` — backing column rename, type change
+3. **If mobile is unaffected** (e.g. web added a new web-only field to
+   `userController.ts`):
+   - Run `pnpm check:web -- --bump` to advance `tasks/web-repo-pin.txt`
+     to the new web HEAD.
+   - Commit the pin bump with a one-line note about why mobile is unaffected.
+4. **If mobile IS affected** (e.g. web renamed `userEmail` → `email`):
+   - Update the relevant section of THIS doc to match the new shape.
+   - Update `src/types/auth.ts` to match.
+   - Update `src/services/__errors__.ts` if error codes changed.
+   - Update `src/services/authService.ts` if endpoint behaviors changed.
+   - Run `pnpm test:contract` against the new deploy. Green = mobile is
+     in sync.
+   - Then `pnpm check:web -- --bump` to advance the pin.
+   - Commit doc + types + service changes + pin bump together.
+
+### When `pnpm test:contract` fails
+
+That's the alarm — production behavior diverged from this doc. Fix path
+is the same as "If mobile IS affected" above: update doc + types + code
+to match, re-run, commit.
+
+### When you intentionally change the contract from the mobile side
+
+You don't. Mobile is the consumer; web is the source of truth. If mobile
+needs a new endpoint or shape change, it's a web PR first → deploy →
+update this doc → bump pin → mobile follows.
