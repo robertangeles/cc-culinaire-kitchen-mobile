@@ -51,6 +51,11 @@ export function TextField({
           autoCapitalize={autoCapitalize}
           autoComplete={autoComplete}
           keyboardType={keyboardType}
+          // Android Autofill (triggered by `autoComplete`) tears down the IME
+          // session immediately after focus, causing the keyboard to flash open
+          // and close. Disabling autofill on these fields stops the cascade.
+          // See logcat sequence: SHOW → AssistStructure scan → HIDE_SOFT_INPUT_CLOSE_CURRENT_SESSION.
+          importantForAutofill="no"
           style={styles.input}
         />
         {trailing}
@@ -80,12 +85,11 @@ const styles = StyleSheet.create({
     minHeight: layout.tap + 8,
   },
   focused: {
+    // Only borderColor changes on focus — no elevation/shadow. On Android,
+    // adding elevation on focus causes a 1–2px layout shift which can tear
+    // down the IME session immediately (HIDE_SOFT_INPUT_CLOSE_CURRENT_SESSION).
+    // iOS shadows are visual-only and don't affect layout, so this is fine.
     borderColor: palette.copper,
-    shadowColor: palette.copper,
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
   },
   input: {
     flex: 1,

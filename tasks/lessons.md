@@ -767,3 +767,158 @@ GET; that's the value of having one in the suite.
 Bonus rule: if you ever see "Authentication required" on a request you
 KNOW has a valid token, run with `redirect: 'manual'` to check whether
 a 3xx is silently eating your headers.
+
+---
+
+## 2026-04-28 — Adding `elevation` on TextInput focus tears down the Android IME session
+
+**Problem.** TextField's `focused` style added `elevation: 2` to give the
+field a "lifted" feel on focus. On Moto G86 (Android 14) this caused the
+keyboard to flash open and immediately close every time the user tapped
+a field. Logcat showed:
+
+```
+SHOW_SOFT_INPUT fromUser true       ← user taps, IME requested
+showSoftInput view=ReactEditText
+AssistStructure (autofill scan)
+onCancelled PHASE_CLIENT_APPLY_ANIMATION
+onRequestHide HIDE_SOFT_INPUT_CLOSE_CURRENT_SESSION fromUser false  ← THE KILL
+hide ime, fromIme=true
+onHidden
+```
+
+`HIDE_SOFT_INPUT_CLOSE_CURRENT_SESSION` is "the current input session is
+closing" — typically because a new InputConnection is being created OR
+the focused view's layout changed enough that Android tears down the
+session. Adding `elevation` adds shadow padding which causes a 1–2px
+layout shift, which the IME interprets as "the field's view has been
+recreated" and closes the session.
+
+(Tested first whether Android Autofill was the culprit by adding
+`importantForAutofill="no"` — no fix. Then removed `elevation` from the
+focused style — fixed instantly.)
+
+**Fix.** Keep visual focus feedback to `borderColor` (and on iOS, shadow
+props which don't affect layout). NEVER add `elevation` on focus on
+Android. If you want a "lift" effect, use a transform (`scale`,
+`translateY`) inside `react-native-reanimated` — those run on the UI
+thread and don't trigger layout passes.
+
+```ts
+// BAD on Android:
+focused: { borderColor: copper, elevation: 2 }
+
+// GOOD:
+focused: { borderColor: copper }
+```
+
+**Rule.** Any focus-state style on a TextInput must be layout-neutral on
+Android — `borderColor`, `backgroundColor`, iOS `shadow*` props are
+safe. Never `elevation`, never `margin`/`padding`/`borderWidth` changes
+on focus. If you need a visual lift, animate via Reanimated transform,
+not layout. Diagnose with `adb logcat --pid=$(adb shell pidof <pkg>)` and
+look for `HIDE_SOFT_INPUT_CLOSE_CURRENT_SESSION` — that string is the
+fingerprint.
+
+---
+
+## 2026-04-28 — Zustand selectors that return new array/object literals cause infinite re-renders
+
+**Problem.** `useConversation` had:
+
+```ts
+const messages = useConversationStore((s) => (activeId ? (s.messages[activeId] ?? []) : []));
+```
+
+When `activeId` is null OR `s.messages[activeId]` is undefined, the
+selector returns a fresh `[]` literal. Zustand uses `Object.is` to
+compare selector results between renders. `[] !== []`, so Zustand thinks
+the value changed, fires subscribers, re-renders the component. The
+re-render runs the selector again, returning ANOTHER fresh `[]`, which
+Zustand sees as changed again — infinite loop. React eventually throws
+"Maximum update depth exceeded".
+
+This bug only manifests once a component using the hook actually mounts
+on a screen the user navigates to. In our case, post-login routing
+landed on the chat screen for the first time, mounting `useConversation`
+and `useAntoine` (both had the same pattern), and the loop fired.
+
+**Fix.** Use a module-level constant for the empty-state value so all
+selector calls return the same reference:
+
+```ts
+const EMPTY_MESSAGES: Message[] = [];
+
+const messages = useConversationStore((s) =>
+  activeId ? (s.messages[activeId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
+);
+```
+
+**Rule.** A Zustand selector must return either:
+
+1. A primitive (number/string/boolean) — Object.is on primitives is value
+   equality.
+2. A reference that's stable across renders — a value the store already
+   stores (e.g. `s.messages[id]`), or a module-level constant.
+
+NEVER `[]`, `{}`, `new Date()`, `Array.from(...)`, `Object.values(...)`,
+or any expression that creates a new reference each call. If you need
+derived data, either compute it AFTER the selector or use `useShallow`
+from `zustand/shallow`. The dev-time tell: a screen that worked in
+isolation suddenly throws "Maximum update depth exceeded" when mounted
+behind another component that updates state. Search for selectors with
+`?? []` or `?? {}` first.
+
+---
+
+## 2026-04-28 — `&&` and `||` have different precedence in cmd.exe vs bash
+
+**Problem.** I wrote `package.json` `start` script as
+`node scripts/check-web-drift.mjs || true && expo start --dev-client` —
+intending the drift check to warn-but-not-block dev (`|| true` swallows
+its non-zero exit), then run expo. In bash that's left-associative:
+`((A || true) && B)` — always runs B.
+
+In cmd.exe (which is what pnpm spawns scripts through on Windows), `&&`
+binds tighter than `||`, so it parses as `A || (true && B)`. When A
+succeeds (the common case), `||` short-circuits and B never runs. Result:
+`pnpm start` printed the drift OK message and exited without ever
+launching Metro. Took ~10 minutes of "no QR code" confusion to find.
+
+**Fix.** Removed the warn-only chain entirely. The hard-blocking
+`node scripts/check-web-drift.mjs && expo run:android` on `pnpm android`
+still works (single `&&`, no precedence ambiguity) and is sufficient
+because builds are when drift actually matters. Manual check via
+`pnpm check:web` covers the warn-only use case.
+
+**Rule.** Never chain `||` and `&&` in npm scripts that target Windows.
+Either keep it to a single `&&` (works on both), or move the logic into
+a small Node script that does its own conditional. `set -o pipefail` is
+also unavailable in cmd, so don't rely on it.
+
+---
+
+## 2026-04-28 — Settled on Render `www` host as canonical; lessons compounded
+
+**Summary of the four bugs that surfaced during the first real device
+test of the email/password login flow against production:**
+
+1. `https://culinaire.kitchen` apex 301-redirects to `www`. Fetch
+   strips `Authorization` on cross-origin redirects → /auth/me 401.
+   POST endpoints get the same redirect but lose the BODY (POST → GET
+   on 301 per RFC 7231) → /auth/login returns "Invalid email or password"
+   for valid creds. **Always use `https://www.culinaire.kitchen`.**
+2. TextField `elevation: 2` on focus → Android keyboard flash-and-close.
+3. `package.json` `start` chain → silently never launches Metro.
+4. Zustand selectors returning `?? []` → infinite re-render on chat
+   screen mount.
+
+All four were caught in one device-test session. None were caught by
+unit tests. Two were caught by the contract test suite (apex/www,
+indirectly). The other two were device-only.
+
+**Rule.** A device test catches an entire CLASS of bugs that no other
+test layer catches: native module integration, redirects, render loops,
+keyboard behavior, layout shifts, real-network behavior. **Always device-
+test before claiming a phase is "done."** TypeScript clean + unit tests
+green ≠ ships.

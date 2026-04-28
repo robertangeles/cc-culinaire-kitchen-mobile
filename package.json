@@ -3,7 +3,7 @@
   "main": "expo-router/entry",
   "version": "0.1.0",
   "scripts": {
-    "start": "node scripts/check-web-drift.mjs || true && expo start --dev-client",
+    "start": "expo start --dev-client",
     "android": "node scripts/check-web-drift.mjs && expo run:android",
     "ios": "node scripts/check-web-drift.mjs && expo run:ios",
     "lint": "expo lint",
