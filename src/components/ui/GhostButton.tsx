@@ -11,6 +11,7 @@ interface GhostButtonProps {
   leading?: ReactNode;
   style?: ViewStyle;
   accessibilityLabel?: string;
+  disabled?: boolean;
 }
 
 export function GhostButton({
@@ -20,6 +21,7 @@ export function GhostButton({
   leading,
   style,
   accessibilityLabel,
+  disabled = false,
 }: GhostButtonProps) {
   const pressed = useSharedValue(0);
 
@@ -45,16 +47,17 @@ export function GhostButton({
 
   return (
     <Pressable
-      onPress={onPress}
-      onPressIn={onPressIn}
-      onPressOut={onPressOut}
+      onPress={disabled ? undefined : onPress}
+      onPressIn={disabled ? undefined : onPressIn}
+      onPressOut={disabled ? undefined : onPressOut}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={[full ? styles.fullPressable : styles.pressable, style]}
+      accessibilityState={{ disabled }}
+      style={[full ? styles.fullPressable : styles.pressable, disabled && styles.disabled, style]}
     >
       <Animated.View style={[styles.button, full && styles.full, animatedStyle]}>
         {leading}
-        <Text style={styles.label}>{children}</Text>
+        <Text style={[styles.label, disabled && styles.labelDisabled]}>{children}</Text>
       </Animated.View>
     </Pressable>
   );
@@ -76,4 +79,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   label: { color: palette.ink, fontFamily: fonts.uiBold, fontSize: 16 },
+  disabled: { opacity: 0.5 },
+  labelDisabled: { color: palette.inkMuted },
 });

@@ -40,10 +40,24 @@ function RouteGuard() {
     if (!isHydrated) return;
     const inAuthFlow =
       segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
+    const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
 
-    if (!user && !inAuthFlow) {
-      router.replace('/(welcome)');
-    } else if (user && (segments[0] === '(welcome)' || segments[0] === '(auth)')) {
+    if (!user) {
+      // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
+      if (!inAuthFlow) router.replace('/(welcome)');
+      return;
+    }
+
+    // Logged in but unverified: force the verify-email screen until they
+    // confirm. They can sign out from there to switch accounts.
+    if (!user.emailVerified) {
+      if (!onVerifyEmail) router.replace('/(auth)/verify-email');
+      return;
+    }
+
+    // Fully verified: kick out of welcome + (auth) screens (these only make
+    // sense when logged out or unverified).
+    if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
       router.replace('/(tabs)/chat');
     }
   }, [user, isHydrated, segments, router]);

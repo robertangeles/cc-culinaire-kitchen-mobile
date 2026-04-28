@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -17,6 +18,7 @@ import { GhostButton } from '@/components/ui/GhostButton';
 import { TextField } from '@/components/ui/TextField';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { isEmailNotVerifiedError, isMfaRequiredError } from '@/services/__errors__';
 
 type Mode = 'signin' | 'register';
 
@@ -25,6 +27,7 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onAuthed }: LoginScreenProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
@@ -43,25 +46,35 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
     try {
       if (mode === 'register') {
         // Backend register doesn't auto-log-in. Register, then log in
-        // immediately. If the account requires email verification before
-        // login (RESEND_API_KEY configured server-side), the second call
-        // will throw EmailNotVerifiedError — Phase 5 routes to verify-email.
+        // immediately. The login may throw EmailNotVerifiedError if the
+        // server has email verification enabled — caught below.
         await register(name, email, password);
       }
       await login(email, password);
       onAuthed();
-    } catch {
-      // Phase 5 will pattern-match: MfaRequiredError → push /mfa,
-      // EmailNotVerifiedError → push /verify-email. For now, the message
-      // surfaces via `error` from useAuth — informative even if not yet routable.
+    } catch (e) {
+      if (isMfaRequiredError(e)) {
+        router.push({
+          pathname: '/(auth)/mfa',
+          params: { mfaSessionToken: e.mfaSessionToken },
+        });
+        return;
+      }
+      if (isEmailNotVerifiedError(e)) {
+        router.push({
+          pathname: '/(auth)/verify-email',
+          params: { email: e.email },
+        });
+        return;
+      }
+      // Other errors (bad creds, network) surface via `error` from useAuth.
     }
   };
 
   const google = async () => {
     // Phase 3 wires the native @react-native-google-signin SDK to fetch an
     // ID token and pass it to useAuth.googleSignIn(idToken). For now this
-    // is a no-op so the UI still renders; the button shows "coming soon"
-    // would be premature since Phase 3 lands shortly.
+    // is a no-op so the UI still renders.
   };
 
   return (
@@ -145,7 +158,10 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
             }
           />
           {mode === 'signin' ? (
-            <Pressable style={styles.forgotRow}>
+            <Pressable
+              style={styles.forgotRow}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
               <Text style={styles.forgot}>Forgot password</Text>
             </Pressable>
           ) : null}
