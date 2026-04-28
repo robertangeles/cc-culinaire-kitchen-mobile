@@ -809,10 +809,10 @@ Claude must:
 
 ## Branch Naming
 
-    feature/on-device-inference
-    feature/google-play-billing
-    fix/chat-scroll-to-bottom
-    hotfix/model-load-crash
+    feature/ck-mob/on-device-inference
+    feature/ck-mob/google-play-billing
+    fix/ck-mob/chat-scroll-to-bottom
+    hotfix/ck-mob/model-load-crash
 
 ## CI Pipeline
 
