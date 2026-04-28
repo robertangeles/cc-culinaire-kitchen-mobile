@@ -5,6 +5,366 @@ Self-improvement loop per CLAUDE.md § "Self-Improvement Loop". Format:
 
 ---
 
+# Cross-repo facts: shared backend with cc-culinaire-kitchen
+
+These lessons describe the relationship between this mobile repo and the
+web repo at <https://github.com/robertangeles/cc-culinaire-kitchen> (cloned
+locally at `c:\My AI Projects\cc-culinaire-kitchen`). **Both apps share a
+single Express + Drizzle + Postgres backend.** Read these before any auth /
+backend integration work.
+
+## 2026-04-27 — Web app already shipped Stage 1 of mobile backend prep (commit afecf95)
+
+**Problem.** Without inspection, you'd assume the web backend needs
+significant changes for mobile (Bearer auth, native CORS, JSON tokens,
+device push tokens). It does NOT — the user already shipped this.
+
+**Fix.** Confirmed via `git show afecf95da2b144c8822bd9346d22078379d5ea86`
+in the web repo. That commit added:
+
+- `packages/server/src/middleware/auth.ts` — accepts
+  `Authorization: Bearer <token>` alongside `access_token` cookie. Bearer
+  is checked first.
+- `packages/server/src/controllers/authController.ts` — `handleLogin`,
+  `handleRefresh`, `handleMfaVerify` all return tokens in the JSON body
+  as `{ user, tokens: { accessToken, refreshToken } }`. Native clients
+  use this; web ignores and reads cookies.
+- `handleLogout` and `handleRefresh` accept `refreshToken` in the request
+  body for native clients.
+- `index.ts` CORS allowlist extended to `https://localhost` and
+  `capacitor://localhost`. Origin-less requests (RN fetch sends no
+  Origin header) still allowed.
+- New `device_token` table + `POST /api/notifications/register-device`
+  endpoint (idempotent upsert keyed on `token_value`). For FCM later.
+
+**Rule.** **Do NOT duplicate existing backend work.** Before designing any
+backend change for mobile, search the web repo's git log for "mobile" or
+"native" keywords (`git log --grep mobile -i`) and inspect the latest
+auth-adjacent commits. Most of the heavy lifting is probably done.
+
+---
+
+## 2026-04-27 — Web backend's actual endpoint paths and response shapes (the source of truth)
+
+**Problem.** When I wrote the mobile auth plan from generic React/Express
+expectations, several details were wrong: I assumed `/auth/password-reset/request`
+when actual is `/auth/forgot-password`, assumed flat `{ accessToken,
+refreshToken }` when actual is nested `{ tokens: { accessToken,
+refreshToken } }`, assumed register auto-logs-in when it doesn't.
+
+**Fix.** Mobile authService MUST match these exact paths and shapes
+(read directly from `packages/server/src/routes/auth.ts` +
+`packages/server/src/controllers/authController.ts`):
+
+| Mobile call           | Path (`/api` prefix mounted in `index.ts`) | Body                                         | Response shape                                                                                     |
+| --------------------- | ------------------------------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `register`            | `POST /api/auth/register`                  | `{ name, email, password, guestToken? }`     | `{ userId, message, autoVerified }` (does NOT log in)                                              |
+| `login` (no MFA)      | `POST /api/auth/login`                     | `{ email, password }`                        | `{ user, tokens: { accessToken, refreshToken } }`                                                  |
+| `login` (MFA)         | same                                       | same                                         | `{ requiresMfa: true, mfaSessionToken }` (HTTP 200, NOT 202)                                       |
+| `refresh`             | `POST /api/auth/refresh`                   | `{ refreshToken }`                           | `{ user, tokens: { accessToken, refreshToken } }` (refresh is **NOT rotated** — same one returned) |
+| `logout`              | `POST /api/auth/logout`                    | `{ refreshToken }`                           | `{ message }`                                                                                      |
+| `me`                  | `GET /api/auth/me` (Bearer)                | —                                            | `{ user }`                                                                                         |
+| `verify-email`        | `GET /api/auth/verify-email?token=xxx`     | — (token in URL)                             | `{ message }`                                                                                      |
+| `resend-verification` | `POST /api/auth/resend-verification`       | `{ email }`                                  | `{ message }` (always 200 — anti-enumeration)                                                      |
+| `forgot-password`     | `POST /api/auth/forgot-password`           | `{ email }`                                  | `{ success: true, message }`                                                                       |
+| `reset-password`      | `POST /api/auth/reset-password`            | `{ token, newPassword }` (password ≥8 chars) | `{ success: true }` (does NOT auto-log-in)                                                         |
+| `mfa-verify`          | `POST /api/auth/mfa/verify`                | `{ mfaSessionToken, code }`                  | `{ user, tokens: { accessToken, refreshToken } }`                                                  |
+| `settings (public)`   | `GET /api/settings/` (no auth)             | —                                            | `{ settings: ... }` (already public for login-page branding)                                       |
+
+**Error codes from authController:**
+
+- `EMAIL_EXISTS` → 409
+- `INVALID_CREDENTIALS` → 401
+- `EMAIL_NOT_VERIFIED` → 403
+- `ACCOUNT_SUSPENDED` / `ACCOUNT_CANCELLED` → 403
+- `INVALID_REFRESH_TOKEN` / `REFRESH_TOKEN_EXPIRED` → 401
+- `INVALID_TOKEN` / `TOKEN_ALREADY_USED` / `TOKEN_EXPIRED` → 400 (verify-email)
+- `INVALID_MFA_SESSION` → 401
+- `INVALID_MFA_CODE` → 400
+- Validation errors (Zod) → 400 with `{ error: <messages> }`
+
+**Rule.** Mobile authService imports the **exact** paths and response shapes
+from this table. Don't make them up. When a backend change happens (e.g.
+new field), update this table FIRST so the mobile typings can be regenerated.
+
+Idea for future: extract these as a shared TypeScript package (e.g.
+`packages/shared/src/api-types.ts` in the web monorepo, exported as an
+npm package or git submodule the mobile depends on). Until then, this
+table is the contract.
+
+---
+
+## 2026-04-27 — Mobile backend integration is mostly client-side wiring; ONE new endpoint needed
+
+**Problem.** The original plan estimated 1-3 new backend endpoints. Inspection
+revealed the existing backend already covers everything mobile needs except
+**Google Sign-In ID token verification** (the existing `/auth/google` +
+`/auth/google/callback` is the OAuth code flow for browsers; mobile native
+SDK gives an ID token directly).
+
+**Fix.** Backend PR scope shrunk to ONE endpoint:
+
+- `POST /api/auth/google/idtoken` — accepts `{ idToken }`, verifies with
+  `google-auth-library`'s `OAuth2Client.verifyIdToken({ idToken, audience: ANDROID_CLIENT_ID })`,
+  finds-or-creates the user, returns the same `{ user, tokens }` shape as
+  `/api/auth/login`.
+
+**Rule.** When integrating a new client (mobile, CLI, third-party),
+**audit existing endpoints first**. Most of the time the heavy lifting is
+done; the new endpoint count is much smaller than feared. Web→mobile is
+~95% reusable on the backend per this project's experience.
+
+---
+
+## 2026-04-27 — Web app monorepo layout (cc-culinaire-kitchen)
+
+**Problem.** Knowing where things live in the web repo accelerates every
+backend change.
+
+**Fix.** Layout for reference:
+
+```
+cc-culinaire-kitchen/
+├── packages/
+│   ├── client/          React 19 + Vite frontend
+│   ├── server/          Express v5 + Drizzle + Postgres backend
+│   │   └── src/
+│   │       ├── routes/             Express routers (auth.ts, settings.ts, etc.)
+│   │       ├── controllers/        Request handlers (authController.ts, etc.)
+│   │       ├── services/           Business logic (authService.ts, etc.)
+│   │       ├── middleware/         auth.ts (Bearer + cookie), upload.ts, etc.
+│   │       ├── db/                 schema.ts (Drizzle), migrations/
+│   │       ├── models/             Domain types
+│   │       ├── utils/              env.ts (CLIENT_URL etc.), helpers
+│   │       └── test/               Tests
+│   └── shared/          Shared types (could host shared API types later)
+├── prompts/             AI prompts
+├── docs/
+├── tasks/
+├── package.json         Root (Turbo + pnpm workspaces)
+├── pnpm-workspace.yaml
+└── railway.toml         Railway deployment config (= backend hosted on Railway)
+```
+
+**Stack details:**
+
+- Express v5, jsonwebtoken + bcrypt for auth, Zod for validation,
+  pino for logging.
+- Drizzle ORM v0.38 + Postgres. User table is `user` (camelCase columns).
+  Sensitive fields AES-256-GCM encrypted at rest.
+- OAuth via `google-auth-library` (existing handler).
+- Stripe billing already integrated.
+- Backend runs on **Render** (configured via Render dashboard, no IaC
+  config in repo). Note: `railway.toml` exists at the web repo root but
+  is **stale leftover** from a previous Railway deployment — do NOT use
+  it as evidence of the current deploy target. Confirmed by user
+  2026-04-28.
+
+**Rule.** When making backend changes, follow the existing path
+conventions: routes → controllers → services. Validation in controllers
+via Zod. Logging via pino with structured context (`logger.info({ userId,
+... }, "message")`). Errors thrown from services as `Error` instances
+with named codes (`throw new Error("INVALID_CREDENTIALS")`); controllers
+switch on `err.message` to map to HTTP codes.
+
+---
+
+## 2026-04-28 — Module-level `process.env` reads in web authService capture undefined (init-order bug)
+
+**Problem.** Added `verifyGoogleIdToken` to
+`packages/server/src/services/authService.ts` with `process.env` reads
+at module top-level:
+
+```ts
+const GOOGLE_WEB_CLIENT_ID = process.env.GOOGLE_CLIENT_ID; // undefined!
+```
+
+Production smoke test against the deployed `/api/auth/google/idtoken`
+returned 500 OAUTH_NOT_CONFIGURED, even though the existing browser
+Google OAuth flow worked fine on the same server (proving
+`GOOGLE_CLIENT_ID` IS present at runtime).
+
+**Root cause.** `hydrateEnvFromCredentials()` in
+`packages/server/src/services/credentialService.ts` populates
+`process.env` from the DB at server startup — but it runs AFTER all
+imports have resolved. By the time it runs, the module-level const
+has already captured `undefined`, and stays `undefined` for the
+lifetime of the process. JS const semantics: capture-once, never
+re-evaluate.
+
+The existing OAuth code knew about this trap and used a function getter:
+
+```ts
+// time rather than module-load time (when they may not yet be set).
+function getGoogleClientId() {
+  return process.env.GOOGLE_CLIENT_ID ?? '';
+}
+```
+
+The comment is the warning. I missed it.
+
+**Fix (commit on `fix/google-idtoken-lazy-env` branch in web repo).**
+Replace const-at-module-load with function-at-call-time:
+
+```ts
+function getGoogleWebClientId() { return process.env.GOOGLE_CLIENT_ID; }
+function getGoogleIosClientId() { return process.env.GOOGLE_IOS_CLIENT_ID; }
+
+export async function verifyGoogleIdToken(idToken: string) {
+  const audience = [
+    getGoogleWebClientId(),
+    getGoogleIosClientId(),
+  ].filter((x): x is string => Boolean(x));
+  ...
+}
+```
+
+Behavior identical at call time; values are now read post-hydration.
+
+**Rule.** **Anything in the web server (`packages/server/`) that reads a
+DB-hydrated env var must do so at function-call time, not module-load
+time.** This includes any new env-derived constant added to
+`authService.ts`, `chatService.ts`, `stripeService.ts`, etc. — anything
+that loads before `hydrateEnvFromCredentials()` runs.
+
+The pattern is: write `function getX() { return process.env.X ?? ""; }`
+and call `getX()` inside the function body that needs it. Never write
+`const X = process.env.X` at module top level for any value listed in
+`CREDENTIAL_REGISTRY` (those are the DB-hydrated ones).
+
+Bootstrap-only env vars (`DATABASE_URL`, `CREDENTIALS_ENCRYPTION_KEY`,
+`JWT_*_SECRET`) are safe at module load — they MUST be in `.env` since
+they're needed BEFORE the DB connection is established.
+
+---
+
+## 2026-04-28 — Web backend uses DB-backed credentials (hydrated to process.env at startup)
+
+**Problem.** Initial assumption was that secrets like `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` live in `.env` (the standard Express pattern). When
+the user said "Google OAuth credentials are stored in the DB", I almost
+designed a refactor to read from DB at request time. That would have been
+duplicate work — the architecture already handles this elegantly.
+
+**Fix.** Inspected the live DB and found `credential` table with category
+`oauth` containing Google client ID/secret/callback URL (encrypted with
+AES-256-GCM via `CREDENTIALS_ENCRYPTION_KEY` in .env). The function
+`hydrateEnvFromCredentials()` in
+`packages/server/src/services/credentialService.ts` runs at server
+startup (called from `index.ts:338`):
+
+```ts
+export async function hydrateEnvFromCredentials(): Promise<void> {
+  const rows = await db.select().from(credential);
+  for (const row of rows) {
+    const value = decrypt(row.credentialValue, row.credentialIv, row.credentialTag);
+    process.env[row.credentialKey] = value;
+  }
+}
+```
+
+So **DB is the source of truth**; env is the runtime cache. Code that
+reads `process.env.X` is reading a value that originated in the DB
+(unless X exists in the env file as a fallback for keys not in the DB).
+The `CREDENTIAL_REGISTRY` constant in the same file declares which keys
+the Settings UI should expose for management. Categories live in
+`CREDENTIAL_CATEGORIES`.
+
+**Rule.** When adding a new server-read secret to the web repo:
+
+1. Add the key to `CREDENTIAL_REGISTRY` so the UI can manage it (set
+   `sensitive: false` for public values like client IDs that ship
+   inside the mobile app, `sensitive: true` for secrets like client
+   secrets and API keys).
+2. The user populates the DB row via the Settings UI (or directly
+   via psql for dev).
+3. Code reads `process.env.X` as normal — the value is hydrated from
+   DB at startup. No DB query needed at request time.
+4. The `.env` file remains a fallback for keys not in the DB (and
+   for bootstrap config like `DATABASE_URL` and
+   `CREDENTIALS_ENCRYPTION_KEY` themselves, which obviously can't
+   come from the DB they're used to read).
+
+---
+
+## 2026-04-28 — Inspecting the live web DB from a Node script (for diagnostics)
+
+**Problem.** When uncertain how the web backend stores something
+(e.g. "are Google OAuth credentials in env or DB?"), the answer is
+in the live database. Pinging the user with hypothetical questions
+wastes their time when one read-only SELECT would resolve it.
+
+**Fix.** A local Node script using the web repo's existing
+`dotenv` and `postgres` deps:
+
+```js
+// File at the WEB REPO ROOT (not in any package/) so module resolution works.
+import 'dotenv/config';
+import postgres from 'postgres';
+
+const sql = postgres(process.env.DATABASE_URL, { max: 1, prepare: false });
+
+try {
+  const rows =
+    await sql`SELECT credential_key, credential_category FROM credential ORDER BY credential_category`;
+  for (const r of rows) console.log(r);
+} finally {
+  await sql.end();
+}
+```
+
+Run with `cd cc-culinaire-kitchen && node _inspect.mjs`.
+
+**Rules:**
+
+- ALWAYS use a filename starting with `_` (e.g. `_inspect.mjs`). The
+  web repo's `.gitignore` matches `/_*.mjs`, `/_*.ts`, `/_*.js` so
+  these can't be accidentally staged. Delete after use.
+- READ-ONLY ONLY. Use SELECT against `information_schema` and the
+  user's tables. No INSERT/UPDATE/DELETE/DROP under any circumstance
+  unless the user has explicitly authorized a specific change.
+- NEVER echo secret-shaped column values to chat. Filter columns
+  whose names match `/secret|password|token|key|hash|encrypted/i`
+  before logging. Inspect SCHEMA + COUNT + non-secret columns.
+- NEVER echo the `DATABASE_URL` value itself (or any part of it) in
+  chat or logs.
+- Connect with `{ max: 1, idle_timeout: 5, prepare: false }` to keep
+  resource impact minimal.
+- Run from the **web repo root** (not from `%TEMP%`) so `node_modules`
+  resolution works against the user's installed deps. The repo's pnpm
+  workspace hoists `postgres` and `dotenv` to root `node_modules`.
+- Always `await sql.end()` in `finally` to release the connection.
+
+This pattern saves a back-and-forth on every "how does the backend
+store X" question. Use it freely for read inspection; ask the user
+before any write.
+
+---
+
+## 2026-04-27 — Always inspect the backend before designing mobile auth (or any client-server integration)
+
+**Problem.** I wrote a detailed mobile auth plan with several wrong
+endpoint paths and response shapes because I didn't read the actual
+backend code first — I extrapolated from generic Express patterns. Almost
+shipped 30 minutes of code that wouldn't have integrated.
+
+**Fix.** Spent ~5 min reading `routes/auth.ts` and `controllers/authController.ts`
+in the web repo. Caught 5+ wrong assumptions:
+
+- Tokens are nested under `tokens.{accessToken,refreshToken}`, not flat.
+- MFA flag is `requiresMfa: true` on a 200, not a 202 with `challengeToken`.
+- `mfaSessionToken` is the field name, not `challengeToken`.
+- Routes are `/forgot-password`, `/reset-password`, `/resend-verification` (single-segment), not `/password-reset/request` etc.
+- Register and reset-password do NOT auto-login.
+
+**Rule.** Before writing any mobile API client function, read the
+controller for the corresponding backend endpoint. The signatures + status
+codes + error names are the contract. Generic best-practice patterns are
+NOT a substitute. Cost of skipping this: hours of debugging mismatched
+shapes during integration.
+
+---
+
 ## 2026-04-27 — Reanimated worklets need `Easing` from `react-native-reanimated`, not `react-native`
 
 **Problem.** `src/constants/theme.ts` imported `Easing` from `react-native` and

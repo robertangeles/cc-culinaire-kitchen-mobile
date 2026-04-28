@@ -5,19 +5,30 @@ import { useAuthStore } from '@/store/authStore';
 describe('authStore', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    useAuthStore.setState({ user: null, token: null, isHydrated: false });
+    useAuthStore.setState({
+      user: null,
+      token: null,
+      refreshToken: null,
+      isHydrated: false,
+    });
   });
 
   it('hydrates from SecureStore when a session exists', async () => {
     const user = { id: 'u1', email: 'a@b.com' };
-    (SecureStore.getItemAsync as jest.Mock)
-      .mockResolvedValueOnce('mock-token')
-      .mockResolvedValueOnce(JSON.stringify(user));
+    // hydrate() reads three SecureStore keys in parallel via Promise.all.
+    // Map by key so mock-call order doesn't matter.
+    (SecureStore.getItemAsync as jest.Mock).mockImplementation(async (key: string) => {
+      if (key === 'ckm_auth_token') return 'mock-token';
+      if (key === 'ckm_auth_refresh_token') return 'mock-refresh';
+      if (key === 'ckm_auth_user') return JSON.stringify(user);
+      return null;
+    });
 
     await useAuthStore.getState().hydrate();
 
     const s = useAuthStore.getState();
     expect(s.token).toBe('mock-token');
+    expect(s.refreshToken).toBe('mock-refresh');
     expect(s.user).toEqual(user);
     expect(s.isHydrated).toBe(true);
   });
