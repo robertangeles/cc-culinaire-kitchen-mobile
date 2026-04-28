@@ -17,7 +17,12 @@
  * Source contract: docs/architecture/web-backend-api.md
  */
 
-const BASE = (process.env.CONTRACT_API_BASE_URL ?? 'https://culinaire.kitchen').replace(/\/$/, '');
+// www subdomain required: the apex 301-redirects to www, and fetch strips
+// Authorization headers on cross-origin redirects. See src/constants/config.ts.
+const BASE = (process.env.CONTRACT_API_BASE_URL ?? 'https://www.culinaire.kitchen').replace(
+  /\/$/,
+  '',
+);
 const TEST_EMAIL = process.env.CONTRACT_TEST_EMAIL;
 const TEST_PASSWORD = process.env.CONTRACT_TEST_PASSWORD;
 const HAVE_CREDS = Boolean(TEST_EMAIL && TEST_PASSWORD);

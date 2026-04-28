@@ -24,12 +24,20 @@ If anything in this document conflicts with those files, **the source files win*
 
 ## Base URL
 
-| Env        | URL                         |
-| ---------- | --------------------------- |
-| Production | `https://culinaire.kitchen` |
-| Local dev  | `http://localhost:3009`     |
+| Env        | URL                             |
+| ---------- | ------------------------------- |
+| Production | `https://www.culinaire.kitchen` |
+| Local dev  | `http://localhost:3009`         |
 
-All API paths below are prefixed with `/api`. So `/auth/login` = `https://culinaire.kitchen/api/auth/login`.
+All API paths below are prefixed with `/api`. So `/auth/login` = `https://www.culinaire.kitchen/api/auth/login`.
+
+**IMPORTANT — use the `www` host.** The apex `culinaire.kitchen`
+301-redirects to `www.culinaire.kitchen`. Node and browser `fetch` strip
+the `Authorization` header on cross-origin redirects (a security default
+to prevent credential leakage). That makes every Bearer-authed GET
+(e.g. `/api/auth/me`) silently fail with 401 if you point at the apex.
+POST endpoints don't follow this code path, so the bug only surfaces on
+GETs — which is why it took the contract test to catch it.
 
 ---
 

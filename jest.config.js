@@ -1,5 +1,9 @@
 module.exports = {
   preset: 'jest-expo',
+  // Load .env BEFORE any test/setup code so process.env.CONTRACT_TEST_*
+  // and other dotenv-style vars are visible (jest does not auto-load .env;
+  // expo CLI does, but `pnpm test:contract` invokes jest directly).
+  setupFiles: ['<rootDir>/jest.env.js'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

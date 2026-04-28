@@ -718,3 +718,52 @@ Workflow when drift is detected:
 pin only after `pnpm test:contract` is green. Never edit
 `tasks/web-repo-pin.txt` by hand without a corresponding doc/types
 update — that defeats the alarm.
+
+---
+
+## 2026-04-28 — `https://culinaire.kitchen` apex strips Bearer auth on GETs (use `www`)
+
+**Problem.** `https://culinaire.kitchen/api/auth/me` returned 401
+"Authentication required" even with a valid fresh access token (just
+issued by `/api/auth/login` to the same host). The middleware code is
+correct — it accepts `Authorization: Bearer <token>` first, then falls
+back to the `access_token` cookie. So the Bearer header was reaching
+some middleware but not the one we expected.
+
+Reproduction with `redirect: 'manual'`:
+
+```
+GET https://culinaire.kitchen/api/auth/me  ->  301
+Location: https://www.culinaire.kitchen/api/auth/me
+```
+
+The apex 301-redirects to www. **Node fetch and browser fetch both strip
+the `Authorization` header on cross-origin redirects** by design (security
+default to prevent credential leakage to a domain the caller didn't
+explicitly authorize). The retried request to www has no Bearer header,
+so the `authenticate` middleware correctly returns 401.
+
+POST endpoints don't redirect (would change semantics), so /login,
+/refresh, /logout work against the apex. Only GETs surface the bug.
+That's why our W1 smoke test (5/5 against apex) didn't catch this.
+
+**Fix.** Use `https://www.culinaire.kitchen` everywhere mobile talks to
+the backend. Updated:
+
+- `src/constants/config.ts` default
+- `.env.example` default
+- `src/__tests__/contract/web-backend.contract.test.ts` default
+- `docs/architecture/web-backend-api.md` base URL section + warning
+- `tasks/web-repo-pin.txt` is unaffected (this is a config issue, not a
+  web-side change)
+
+**Rule.** Always point HTTPS clients at the canonical (post-redirect)
+host directly. If you have an apex/www split, use the host that doesn't
+redirect. Test GET-with-Bearer specifically — POST-only smoke tests
+(like our original W1 smoke) miss this entire class of bug. The
+contract test caught this because it exercised a real authenticated
+GET; that's the value of having one in the suite.
+
+Bonus rule: if you ever see "Authentication required" on a request you
+KNOW has a valid token, run with `redirect: 'manual'` to check whether
+a 3xx is silently eating your headers.

@@ -22,8 +22,13 @@ const extra = (Constants.expoConfig?.extra ?? {}) as {
   googleWebClientId?: string;
 };
 
+// IMPORTANT: use the `www` host. The apex `culinaire.kitchen` 301-redirects
+// to `www.culinaire.kitchen`, and Node/browser fetch strips the
+// `Authorization` header on cross-origin redirects (security default).
+// That breaks any GET endpoint with a Bearer token (e.g. /api/auth/me).
+// POST endpoints don't redirect, so the bug only surfaces on GETs.
 export const API_BASE_URL: string =
-  extra.apiBaseUrl ?? process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://culinaire.kitchen';
+  extra.apiBaseUrl ?? process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://www.culinaire.kitchen';
 
 export const GOOGLE_WEB_CLIENT_ID: string =
   extra.googleWebClientId ?? process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
