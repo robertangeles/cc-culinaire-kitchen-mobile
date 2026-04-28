@@ -45,6 +45,21 @@ export function configureGoogleSignIn(): void {
     // button surface a friendly error if the user actually taps it.
     return;
   }
+  // Permanent startup log — fires once per app launch so any env-baking
+  // mismatch (between .env, Constants.expoConfig.extra, and the running
+  // APK) is immediately visible in Metro output. We spent hours on
+  // 2026-04-28 debugging exactly this class of bug; leaving the log keeps
+  // it cheap and trivially diagnosable next time. See tasks/lessons.md
+  // "app.config.ts extra is BAKED INTO THE APK at build time".
+  if (__DEV__) {
+    console.warn(
+      '[googleSignIn.configure] webClientId =',
+      GOOGLE_WEB_CLIENT_ID || '<EMPTY>',
+      '(length:',
+      GOOGLE_WEB_CLIENT_ID.length,
+      ')',
+    );
+  }
   GoogleSignin.configure({
     webClientId: GOOGLE_WEB_CLIENT_ID,
     // Request offline access only if we ever need to call Google APIs

@@ -922,3 +922,157 @@ test layer catches: native module integration, redirects, render loops,
 keyboard behavior, layout shifts, real-network behavior. **Always device-
 test before claiming a phase is "done."** TypeScript clean + unit tests
 green ≠ ships.
+
+---
+
+## 2026-04-28 — `app.config.ts` `extra` block is BAKED INTO THE APK at build time, NOT served live by Metro
+
+**Problem.** Spent ~2 hours debugging Google Sign-In's DEVELOPER_ERROR.
+Cycled through ~6 wrong theories (test users, OAuth consent, SHA-1
+mismatch, Metro cache, parent-shell env, dotenv loading order) before
+finally finding the cause.
+
+The bug: mobile `.env` had `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID=136...`
+(correct value), shell env was empty, dotenv loaded `.env` correctly,
+Metro restarted with `--clear`, full cache wipe — and the bundle STILL
+emitted `763...` (the previous wrong value). Theories about cache layers
+all wrong.
+
+The actual cause: `app.config.ts` `extra.googleWebClientId` is read by
+expo CLI during `expo prebuild` (step 1 of `pnpm android`). The result
+is written to:
+
+```
+node_modules/expo-constants/android/build/generated/assets/expo-constants/app.config
+android/app/build/intermediates/assets/debug/mergeDebugAssets/app.config
+```
+
+These get bundled INTO the APK as static asset files. At runtime, the
+dev client reads `Constants.expoConfig.extra` from these baked-in files,
+**NOT** from Metro's live manifest. So:
+
+- Editing `.env` does NOTHING to a running dev client
+- Restarting Metro does NOTHING
+- `--clear` (Metro cache wipe) does NOTHING
+- Reloading the app on phone does NOTHING
+
+The ONLY thing that updates `Constants.expoConfig.extra` is rebuilding
+the APK via `pnpm android` (which re-runs `expo prebuild` → regenerates
+the asset → repackages APK → reinstalls on phone).
+
+**How we eventually found it:** `grep -r "763217675580" --exclude-dir=node_modules`
+(then again WITH node_modules) showed the literal value lived in those
+generated `app.config` asset files. Hours of cache-layer theorizing
+were wasted; the grep should have been the FIRST diagnostic.
+
+**Fix process when you change ANY value referenced from `app.config.ts`'s
+`extra` block (or any other config field):**
+
+1. Edit `.env` (or wherever the source value lives)
+2. Run `pnpm android` to rebuild the APK
+3. Wait for "Installing APK..." to finish
+4. App auto-launches with new value
+5. JS hot-reload after this point is fine for JS-only changes
+
+**Things that DO hot-reload via Metro and don't need APK rebuild:**
+
+- Pure JS/TS source files in `src/` and `app/`
+- Style changes
+- New components / hooks / utilities
+- Most authoring-time changes
+
+**Things that DO need APK rebuild:**
+
+- Anything in `app.config.ts` (extra, plugins, package, scheme, etc.)
+- Adding/removing native modules (anything in package.json that has
+  native code)
+- Changing `EXPO_PUBLIC_*` env vars that are read via
+  `Constants.expoConfig.extra.*` (vs read directly from
+  `process.env.EXPO_PUBLIC_*` which DOES inline at babel-transform time
+  but ALSO requires Metro `--clear` to pick up — see the babel-inline
+  caveat in expo docs)
+
+**Rule.** When a runtime value doesn't match what `.env` says, FIRST run
+`grep -r '<literal value>' --exclude-dir=node_modules` then `grep -r '<literal value>' node_modules`.
+The literal value lives somewhere on disk; find it before theorizing
+about cache layers. If the hits are in `android/app/build/...` or
+`node_modules/expo-constants/android/build/...`, the answer is "rebuild
+the APK with `pnpm android`." Don't waste an hour guessing.
+
+Companion rule (memory `feedback_debugging_protocol_strict.md`):
+ALWAYS follow CLAUDE.md § 9 "Debugging Protocol" — Confirmed / Evidence /
+Root cause (only if confirmed) / Fix (only after root cause) / Verify with.
+Never offer "try X then if it doesn't work try Y" sequences. Each failed
+guess costs the user real time + frustration.
+
+---
+
+## 2026-04-28 — Mobile cleanup + watchdog infrastructure (the durable fix for "nothing happens" hangs)
+
+**Problem.** Across one debugging session we hit at least 4 distinct
+"`pnpm android` hangs silently" failures with at least 3 different root
+causes (stale adb, Metro cache, APK-baked-stale-config). Each took
+5–30 minutes to diagnose. The terminal showed env-load lines then
+nothing — no error, no progress indicator. User had to manually
+investigate process state every time.
+
+**Fix.** Two-script infrastructure that makes hangs both PREVENTABLE
+(by clearing common stale state automatically) and VISIBLE (by warning
+when output stops) on every mobile script invocation:
+
+1. `scripts/mobile-cleanup.mjs` — runs before every `pnpm start`,
+   `pnpm android`, `pnpm ios`. Three modes:
+   - `--light` (used by `pnpm start`): kill stale adb, restart adb-server
+     fresh, verify device, set adb reverse for Metro
+   - `--full` (used by `pnpm start:fresh`): light + wipe Metro/babel/.expo
+     caches
+   - `--rebuild` (used by `pnpm android`/`pnpm ios`): full + wipe
+     `android/app/build` + `node_modules/expo-constants/android/build`
+     so prebuild regenerates the APK's app.config asset with current
+     `.env` values
+     Every step logs explicitly. Bails out if no device connected.
+
+2. `scripts/expo-build.mjs` — wraps every `expo` CLI invocation. Two
+   guarantees:
+   - `EXPO_DEBUG=true` set on the spawned expo process so every internal
+     step logs to stderr (autolinking, prebuild, network calls, etc.).
+     When a hang happens the LAST line shows exactly which step is
+     stuck — eliminates mystery silence.
+   - Watchdog timer: if 60+ seconds pass with no new output, prints a
+     visible WARNING explaining what likely went wrong + what to try.
+     User stops staring at silent terminals.
+
+**Wired in** via package.json scripts:
+
+```json
+"start":       "node scripts/mobile-cleanup.mjs --light && node scripts/expo-build.mjs start --dev-client",
+"start:fresh": "node scripts/mobile-cleanup.mjs --full && node scripts/expo-build.mjs start --dev-client --clear",
+"android":     "node scripts/check-web-drift.mjs && node scripts/mobile-cleanup.mjs --rebuild && node scripts/expo-build.mjs run:android",
+"ios":         "node scripts/check-web-drift.mjs && node scripts/mobile-cleanup.mjs --rebuild && node scripts/expo-build.mjs run:ios",
+"cleanup":     "node scripts/mobile-cleanup.mjs"
+```
+
+**What this guarantees:**
+
+- Stale adb will never wedge another build (caught + cleared every run)
+- The APK-baked-stale-config bug from earlier today cannot recur
+  (`--rebuild` mode wipes the cache before every native rebuild)
+- If anything ELSE hangs, the watchdog announces it within 60 sec
+  with the last expo CLI step visible, so we can diagnose evidence-based
+  instead of guessing through cache layers
+
+**What this does NOT guarantee:**
+
+- That `expo run:android` will never hang again. The session also hit a
+  separate intermittent hang in expo CLI's pre-Gradle work whose root
+  cause was not captured (no debug logging at the time). With the
+  watchdog now always on, the next recurrence will be visible
+  immediately and the EXPO_DEBUG output will show the exact step.
+
+**Rule.** Never run `expo run:android` / `expo start` directly anymore.
+Always go through the package.json scripts. They:
+
+1. Clean adb + caches per run-mode
+2. Verify device connected
+3. Run expo CLI under the watchdog with verbose logging
+   If you bypass them and hit a hang, you'll be back to debugging blind.
