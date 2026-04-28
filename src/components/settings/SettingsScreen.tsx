@@ -41,15 +41,15 @@ export function SettingsScreen() {
         <View style={styles.row}>
           <View style={styles.avatar}>
             <Text style={styles.avatarLetter}>
-              {(user?.displayName ?? user?.email ?? 'C')[0]?.toUpperCase()}
+              {(user?.userName ?? user?.userEmail ?? 'C')[0]?.toUpperCase()}
             </Text>
           </View>
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {user?.displayName ?? 'Chef'}
+              {user?.userName ?? 'Chef'}
             </Text>
             <Text style={styles.rowMeta} numberOfLines={1}>
-              {user?.email ?? '—'}
+              {user?.userEmail ?? '—'}
             </Text>
           </View>
         </View>

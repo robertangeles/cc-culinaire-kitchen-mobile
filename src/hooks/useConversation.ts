@@ -2,13 +2,24 @@ import { useCallback, useEffect } from 'react';
 
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+import type { Message } from '@/types/chat';
+
+// Stable empty-array reference. Returning `[]` (a fresh array literal) from a
+// Zustand selector triggers infinite re-renders: Object.is sees a new ref each
+// call → fires subscribers → re-renders → selector returns ANOTHER fresh `[]`.
+// Use a module-level constant so the no-messages case returns the same ref.
+const EMPTY_MESSAGES: Message[] = [];
 
 export function useConversation() {
-  const userId = useAuthStore((s) => s.user?.id ?? null);
+  // Backend userId is `number`; local SQLite stores it as `text`. Coerce at
+  // the boundary so the on-device schema stays opaque to backend type changes.
+  const userId = useAuthStore((s) => (s.user ? String(s.user.userId) : null));
   const dbReady = useConversationStore((s) => s.dbReady);
   const conversations = useConversationStore((s) => s.conversations);
   const activeId = useConversationStore((s) => s.activeId);
-  const messages = useConversationStore((s) => (activeId ? (s.messages[activeId] ?? []) : []));
+  const messages = useConversationStore((s) =>
+    activeId ? (s.messages[activeId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
+  );
   const hydrate = useConversationStore((s) => s.hydrate);
   const startNew = useConversationStore((s) => s.startNew);
   const setActive = useConversationStore((s) => s.setActive);

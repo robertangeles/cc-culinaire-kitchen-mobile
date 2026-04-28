@@ -1,3 +1,4 @@
+import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -17,6 +18,8 @@ import { GhostButton } from '@/components/ui/GhostButton';
 import { TextField } from '@/components/ui/TextField';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { isEmailNotVerifiedError, isMfaRequiredError } from '@/services/__errors__';
+import { isGoogleSignInCancelled, signInWithGoogle } from '@/services/googleSignIn';
 
 type Mode = 'signin' | 'register';
 
@@ -25,13 +28,15 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onAuthed }: LoginScreenProps) {
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPw, setShowPw] = useState(false);
-  const { login, googleSignIn, isLoading, error } = useAuth();
+  const { login, register, googleSignIn, isLoading, error } = useAuth();
+  const [googleError, setGoogleError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
     () => email.includes('@') && password.length >= 6 && (mode === 'signin' || name.length > 0),
@@ -41,19 +46,54 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   const submit = async () => {
     if (!canSubmit) return;
     try {
+      if (mode === 'register') {
+        // Backend register doesn't auto-log-in. Register, then log in
+        // immediately. The login may throw EmailNotVerifiedError if the
+        // server has email verification enabled — caught below.
+        await register(name, email, password);
+      }
       await login(email, password);
       onAuthed();
-    } catch {
-      // error surfaced via `error` from useAuth
+    } catch (e) {
+      if (isMfaRequiredError(e)) {
+        router.push({
+          pathname: '/(auth)/mfa',
+          params: { mfaSessionToken: e.mfaSessionToken },
+        });
+        return;
+      }
+      if (isEmailNotVerifiedError(e)) {
+        router.push({
+          pathname: '/(auth)/verify-email',
+          params: { email: e.email },
+        });
+        return;
+      }
+      // Other errors (bad creds, network) surface via `error` from useAuth.
     }
   };
 
   const google = async () => {
+    setGoogleError(null);
     try {
-      await googleSignIn();
+      const { idToken } = await signInWithGoogle();
+      await googleSignIn(idToken);
       onAuthed();
-    } catch {
-      // surfaced via `error`
+    } catch (e) {
+      if (isGoogleSignInCancelled(e)) {
+        // Silent no-op — user backed out of the picker, no need for an error.
+        return;
+      }
+      if (isEmailNotVerifiedError(e)) {
+        // Theoretically possible if backend rejects unverified Google accounts —
+        // unusual but we route the same way as email/password sign-in.
+        router.push({
+          pathname: '/(auth)/verify-email',
+          params: { email: e.email },
+        });
+        return;
+      }
+      setGoogleError(e instanceof Error ? e.message : 'Google sign-in failed.');
     }
   };
 
@@ -138,13 +178,17 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
             }
           />
           {mode === 'signin' ? (
-            <Pressable style={styles.forgotRow}>
+            <Pressable
+              style={styles.forgotRow}
+              onPress={() => router.push('/(auth)/forgot-password')}
+            >
               <Text style={styles.forgot}>Forgot password</Text>
             </Pressable>
           ) : null}
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {googleError ? <Text style={styles.error}>{googleError}</Text> : null}
 
         <View style={styles.spacer} />
 

@@ -70,7 +70,7 @@ function DownloadIcon({ color }: { color: string }) {
 export function OnboardingScreen({ onDownload, onSkip }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
-  const firstName = (user?.displayName ?? user?.email ?? 'chef').split(/[ @]/)[0] ?? 'chef';
+  const firstName = (user?.userName ?? user?.userEmail ?? 'chef').split(/[ @]/)[0] ?? 'chef';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.s4 }]}>

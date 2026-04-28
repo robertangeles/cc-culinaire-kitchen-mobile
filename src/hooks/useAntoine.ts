@@ -12,6 +12,11 @@ import { useModelStore } from '@/store/modelStore';
 import type { Message } from '@/types/chat';
 import type { InferenceMessage } from '@/types/inference';
 
+// Stable empty-array reference for the messages selector — see useConversation.ts
+// for the full explanation. Returning a fresh `[]` from a Zustand selector
+// causes infinite re-renders when there's no active conversation.
+const EMPTY_MESSAGES: Message[] = [];
+
 let cachedContext: LlamaContext | null = null;
 
 async function ensureContext(): Promise<LlamaContext> {
@@ -32,10 +37,14 @@ function makeMessage(
 }
 
 export function useAntoine() {
-  const userId = useAuthStore((s) => s.user?.id ?? null);
+  // Backend userId is `number`; local SQLite stores it as `text`. Coerce at
+  // the boundary so the on-device schema stays opaque to backend type changes.
+  const userId = useAuthStore((s) => (s.user ? String(s.user.userId) : null));
   const isModelActive = useModelStore((s) => s.isActive);
   const activeId = useConversationStore((s) => s.activeId);
-  const messages = useConversationStore((s) => (activeId ? (s.messages[activeId] ?? []) : []));
+  const messages = useConversationStore((s) =>
+    activeId ? (s.messages[activeId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
+  );
   const addMessage = useConversationStore((s) => s.addMessage);
   const startNew = useConversationStore((s) => s.startNew);
   const [isThinking, setIsThinking] = useState(false);

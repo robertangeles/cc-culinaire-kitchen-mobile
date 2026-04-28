@@ -25,8 +25,13 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
+import { configureGoogleSignIn } from '@/services/googleSignIn';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+
+// Configure Google Sign-In at module load (idempotent, safe to call before
+// any Google API call). Reads EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from config.
+configureGoogleSignIn();
 
 SplashScreen.preventAutoHideAsync();
 
@@ -40,10 +45,24 @@ function RouteGuard() {
     if (!isHydrated) return;
     const inAuthFlow =
       segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
+    const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
 
-    if (!user && !inAuthFlow) {
-      router.replace('/(welcome)');
-    } else if (user && (segments[0] === '(welcome)' || segments[0] === '(auth)')) {
+    if (!user) {
+      // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
+      if (!inAuthFlow) router.replace('/(welcome)');
+      return;
+    }
+
+    // Logged in but unverified: force the verify-email screen until they
+    // confirm. They can sign out from there to switch accounts.
+    if (!user.emailVerified) {
+      if (!onVerifyEmail) router.replace('/(auth)/verify-email');
+      return;
+    }
+
+    // Fully verified: kick out of welcome + (auth) screens (these only make
+    // sense when logged out or unverified).
+    if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
       router.replace('/(tabs)/chat');
     }
   }, [user, isHydrated, segments, router]);
