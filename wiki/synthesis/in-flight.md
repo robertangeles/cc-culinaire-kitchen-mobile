@@ -12,22 +12,22 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**Idle between milestones.** PRs #1–#5 shipped + merged. Wiki + tooling work is local and uncommitted.
+**Idle between milestones.** PRs #1–#6 shipped + merged. The wiki + tooling are now live on `main`.
 
 ## Last completed
 
-- PR #5 — Wi-Fi/cellular toggle + unified DownloadingScreen routing + safe-area fix. Merged.
-- Wiki bootstrap (12 pages + 1 raw doc) + tooling (`pnpm wiki:search/watch/graph/status`) + 4 automations (pre-commit, post-merge, status line, `/wiki-audit` command). All local, not yet committed.
+- **PR #6 — Wiki bootstrap + tooling.** 13 pages, 4 automations, `pnpm wiki:*` scripts. Merged.
+- **Hotfix PR #7 (in flight on this branch)** — wiki-graph + wiki-search parsers were CRLF-naive; freshly-pulled files on Windows have `\r\n` and the regex expected `\n`, so the post-merge graph rebuild reported `0 edges`. Caught by the post-merge hook itself — the automation worked. Fix: normalise CRLF → LF before parsing.
 
 ## Currently in flight
 
-Nothing actively in progress. Local working directory has uncommitted wiki + tooling changes that should ship as their own PR (suggested branch: `feature/ck-mob/wiki-bootstrap`).
+`fix/ck-mob/wiki-crlf-parser` — the parser CRLF normalisation + this in-flight update. Open as PR #7.
 
 ## Next action — pick one
 
-1. **Commit the wiki + tooling work as PR #6.** Recommended before starting new code work so the wiki state is shared.
-2. **Start `llama.rn` integration** — the largest pending milestone. Replaces the stub in `src/services/inferenceService.ts`. The Antoine model files are already on disk (verified PR #4). Probably warrants its own session due to scope.
-3. **Smaller follow-ups** — `react-native-iap` for Google Play Billing; `Detox` E2E suite. Both are P1/P2 in `tasks/todo.md` but lower-impact than llama.rn.
+1. **PR #8 (small): minimal CI workflow.** No `.github/workflows/` exists today; CLAUDE.md mentions a CI section but it's actually local-gates-before-push. ~30 min to add a single `ci.yml` running `pnpm install` + `tsc --noEmit` + `lint` + `test` on every PR. Cheap insurance.
+2. **`llama.rn` integration** — the largest pending milestone. Replaces the stub in `src/services/inferenceService.ts`. Probably its own session due to scope.
+3. **Smaller follow-ups** — `react-native-iap` for Google Play Billing; `Detox` E2E suite.
 
 ## Open questions / blockers
 

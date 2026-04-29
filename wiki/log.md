@@ -4,6 +4,30 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-04-29 — Hotfix: wiki parsers were CRLF-naive on Windows checkouts (caught by the post-merge hook!)
+
+**Symptom.** Right after PR #6 merged and `git pull` synced main, the post-merge hook (`.husky/post-merge`) auto-ran `node scripts/wiki-graph.mjs build` and reported:
+
+```
+[wiki-graph] built — 13 nodes, 0 edges, 0 broken refs
+```
+
+We had 34 edges and 1 broken ref pre-merge. Zero edges = silently broken parser.
+
+**Root cause.** `parseFrontmatter()` in both `scripts/wiki-graph.mjs` and `scripts/wiki-search.mjs` matched against `^---\n([\s\S]*?)\n---\n([\s\S]*)$`. Files freshly checked out on Windows have CRLF line endings (`---\r\n`). The regex's literal `\n` didn't match `\r\n`, so the entire frontmatter block wasn't extracted, so `related:` was never read, so no edges. `pnpm wiki:status` would have happily reported a wiki with zero relationships.
+
+**Fix.** Normalise `\r\n → \n` once at the top of `parseFrontmatter()` in both files. Same logic, robust across platforms.
+
+**Lessons:**
+
+- The post-merge automation paid for itself on its second run. Without it, this would have silently rotted until someone manually called `pnpm wiki:graph build`.
+- Anything that parses tracked text files on Windows needs to handle CRLF. Adding a `.gitattributes` with `* text=auto eol=lf` would also have caught this, but normalising in the parser is more defensive.
+- Test the failure mode before shipping: a quick "what does this look like on a fresh clone?" thought experiment would have caught it.
+
+Hotfix shipped as PR #7 alongside an `in-flight.md` update.
+
+---
+
 ## 2026-04-29 — Added `wiki/synthesis/in-flight.md` for cross-session continuity
 
 **Problem.** Each new Claude session starts fresh. The TodoWrite list (the most precise picture of "where we are") evaporates at session end. Without a deliberate breadcrumb, the next Claude has to infer the next action from `project-status.md` + `tasks/todo.md` + recent git log — and might guess wrong.
