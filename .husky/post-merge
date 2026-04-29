@@ -1,0 +1,4 @@
+# Post-merge: rebuild the wiki graph so pulling a teammate's wiki edits
+# keeps `wiki/.graph.json` fresh. Sub-second on hundreds of pages.
+# Non-blocking; failure here shouldn't break a merge.
+node scripts/wiki-graph.mjs build || true

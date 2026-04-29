@@ -1,1 +1,7 @@
 pnpm lint-staged
+
+# Wiki health check — non-blocking. Surfaces broken refs + orphans
+# every commit so they're visible, not silent. Doesn't fail the commit
+# (broken refs include intentional forward-references like
+# `[[on-device-inference]]` which mark "create this page when relevant").
+node scripts/wiki-status.mjs || true

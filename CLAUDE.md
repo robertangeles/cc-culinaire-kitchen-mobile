@@ -706,6 +706,140 @@ Structure:
 
 ---
 
+# LLM Wiki
+
+This project maintains a living knowledge wiki in `wiki/`.
+
+## At the start of every session
+
+1. **Read `wiki/synthesis/in-flight.md` FIRST.** It's a short, fast-changing page that tells you what's currently in progress, what was just completed, and what the next action is. If a previous session paused mid-task, this is where to find the breadcrumb.
+2. **Then read `wiki/index.md`** for the catalog of all wiki pages and to understand what is already known.
+
+The two-step read order matters: in-flight first (so you know what to pick up), index second (so you know where to find detail).
+
+## During the session
+
+When you make a significant decision, discover a non-obvious pattern, or implement something architecturally important — write it to the appropriate wiki folder.
+
+## At the end of every session
+
+1. **Update `wiki/synthesis/in-flight.md`** — move what was just completed into "Last completed", update "Currently in flight" to reflect anything paused mid-task, update "Next action" to the concrete next step. This is what the next session reads first.
+2. **Append to `wiki/log.md`** with the long-form summary of what was done and decided.
+
+## Wiki rules
+
+- `wiki/entities/` — named things: Antoine, the screen graph, the design system, the web backend
+- `wiki/concepts/` — patterns and ideas: background download architecture, on-device inference lifecycle, privacy invariant enforcement
+- `wiki/decisions/` — architectural decisions with date and rationale: "Why KSP over kapt", "Why JS-side multi-file orchestration"
+- `wiki/synthesis/` — cross-cutting analysis, lessons, open questions, project status
+- `raw/` — immutable source documents, never modify; sync from upstream when upstream changes
+- Always update `wiki/index.md` when creating a new wiki page
+- Always append to `wiki/log.md` when modifying the wiki
+- Never modify files in `raw/`
+
+## Wiki page format
+
+Every wiki page must start with:
+
+```markdown
+---
+title: [page title]
+category: [entity | concept | decision | synthesis]
+created: [YYYY-MM-DD]
+updated: [YYYY-MM-DD]
+related: [[page-name]], [[page-name]]
+---
+
+[one sentence summary]
+
+[content]
+```
+
+## Wiki tooling
+
+Three local scripts maintain the wiki without external services. Use them in this order of effort:
+
+### Level 1 — read the index
+
+`wiki/index.md` is loaded into context at the start of every session. For < 50 pages, this is fine.
+
+### Level 2 — search before reading
+
+When the wiki grows past ~30 pages and full-page reads are slow, search first:
+
+```bash
+pnpm wiki:search "background download"
+pnpm wiki:search "ksp" --category decision
+pnpm wiki:search "privacy" --limit 3
+```
+
+Returns title, category, summary, and path for each match. Backed by `git grep` (always present in a git repo, sub-second on hundreds of pages).
+
+### Level 3 — watch raw/
+
+A long-running file watcher surfaces new drops in `raw/` so they don't get forgotten:
+
+```bash
+pnpm wiki:watch       # Ctrl-C to stop
+```
+
+When a file appears in `raw/`, prints the suggested ingest command. Doesn't auto-invoke Claude.
+
+### Level 4 — graph relationships
+
+Build a graph of `related: [[...]]` edges and traverse:
+
+```bash
+pnpm wiki:graph build                              # rebuild from wiki/
+pnpm wiki:graph stats                              # node/edge counts by category
+pnpm wiki:graph links-to antoine                   # incoming references
+pnpm wiki:graph links-from background-download     # outgoing references
+pnpm wiki:graph neighbours antoine                 # both directions
+pnpm wiki:graph path antoine ksp-vs-kapt           # shortest path (BFS)
+pnpm wiki:graph orphans                            # pages with no edges
+pnpm wiki:graph broken                             # references to missing pages
+```
+
+`pnpm wiki:graph broken` is especially useful — surfaces forward-references to pages you intended to create but haven't yet, so they don't rot silently.
+
+The graph is persisted to `wiki/.graph.json` (gitignored). Rebuild after meaningful edits. JSON-backed at this scale; the script's API stays the same if we ever swap to SQLite for 1000+ pages.
+
+## Automations
+
+Four pieces of automation keep the wiki healthy without ceremony:
+
+### 1. Pre-commit health check (non-blocking)
+
+`.husky/pre-commit` runs `node scripts/wiki-status.mjs` after `lint-staged`. Prints `wiki: 12 pages, 1 broken` (or similar) on every commit. **Does NOT block the commit** — broken refs are often intentional forward-references (e.g. `[[on-device-inference]]`). The print is shame-driven maintenance: visible, not silent.
+
+### 2. Status line / shell prompt
+
+`scripts/wiki-status.mjs` prints a one-liner suitable for any status bar. Wire into Claude Code's status line by adding to `.claude/settings.json`:
+
+```json
+{
+  "statusLine": { "type": "command", "command": "node scripts/wiki-status.mjs" }
+}
+```
+
+Or invoke manually via `pnpm wiki:status` (or `pnpm wiki:status -- --verbose` for the breakdown). The script auto-rebuilds the graph if any wiki .md is newer than the cached graph, so the number is always live.
+
+### 3. Post-merge graph rebuild
+
+`.husky/post-merge` runs `node scripts/wiki-graph.mjs build` automatically after `git pull` / `git merge`. Pulling a teammate's wiki edits keeps `wiki/.graph.json` fresh without needing to remember.
+
+### 4. `/wiki-audit` slash command
+
+Defined at `.claude/commands/wiki-audit.md`. Type `/wiki-audit` in any Claude session to:
+
+1. Rebuild the graph
+2. Print stats + broken refs + orphans
+3. Synthesize a brief report: which broken refs are intentional vs. real bugs, which orphans need linking, what to do next
+
+Doesn't auto-fix anything — proposes; user confirms.
+
+---
+
 # Code Quality Rules
 
 - Keep files small and focused
