@@ -45,3 +45,5 @@ app-example
 
 # claude code workspace settings (local to each developer)
 .claude/
+wiki/.graph.json
+

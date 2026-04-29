@@ -16,6 +16,10 @@
     "test:contract": "jest --testPathPattern=contract --testPathIgnorePatterns=/node_modules/",
     "check:web": "node scripts/check-web-drift.mjs",
     "db:generate": "drizzle-kit generate",
+    "wiki:search": "node scripts/wiki-search.mjs",
+    "wiki:watch": "node scripts/wiki-watch.mjs",
+    "wiki:graph": "node scripts/wiki-graph.mjs",
+    "wiki:status": "node scripts/wiki-status.mjs",
     "prepare": "husky"
   },
   "dependencies": {
@@ -65,9 +69,11 @@
     "@types/jest": "^29.5.14",
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.3",
+    "chokidar": "^5.0.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "gray-matter": "^4.0.3",
     "husky": "^9.1.7",
     "jest": "^29.7.0",
     "jest-expo": "^54.0.17",
