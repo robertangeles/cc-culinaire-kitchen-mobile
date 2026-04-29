@@ -33,13 +33,37 @@ export const API_BASE_URL: string =
 export const GOOGLE_WEB_CLIENT_ID: string =
   extra.googleWebClientId ?? process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
+/**
+ * Antoine model assets — hosted on Cloudflare R2 public bucket.
+ *
+ * Sizes verified via HEAD request on 2026-04-29; both files support
+ * `Accept-Ranges: bytes` (required by the native background download
+ * module's HTTP 206 resume logic).
+ *
+ * SHA-256 fields: computed via PowerShell `Get-FileHash -Algorithm SHA256`
+ * on 2026-04-29 against the R2-hosted source files. The native
+ * DownloadWorker compares these byte-for-byte against the file landed
+ * on disk; mismatch deletes the file and surfaces FILE_CORRUPTED to JS.
+ * Lowercased here because the worker calls .equals(ignoreCase = true).
+ */
 export const MODEL = {
   id: 'antoine',
   displayName: 'Antoine',
-  filename: 'gemma-4-e4b-it.Q4_K_M.gguf',
-  mmprojFilename: 'gemma-4-e4b-it.BF16-mmproj.gguf',
-  sizeBytes: 4_970_000_000 + 920_000_000,
-  cdnUrl: 'https://cdn.culinaire-kitchen.example/models/antoine/v1/',
+  files: {
+    main: {
+      filename: 'gemma-4-e4b-it.Q4_K_M.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/gemma-4-e4b-it.Q4_K_M.gguf',
+      sizeBytes: 5_335_285_376,
+      sha256: '4ec9a2f362063cc7a0c85ca649d940dc900b7cc6512cc5158e74985f7a2a0a9a',
+    },
+    mmproj: {
+      filename: 'gemma-4-e4b-it.BF16-mmproj.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/gemma-4-e4b-it.BF16-mmproj.gguf',
+      sizeBytes: 991_551_904,
+      sha256: 'c4a315853ae5fb62aa642f8c9cb4f61a49dac4a5ed0428250e2ebcfa02ffde30',
+    },
+  },
+  totalBytes: 5_335_285_376 + 991_551_904,
 } as const;
 
 export const STORAGE_KEYS = {

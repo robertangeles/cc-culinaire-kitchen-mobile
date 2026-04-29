@@ -55,6 +55,11 @@ const config: ExpoConfig = {
     // for Google Play Services). The runtime SDK reads `webClientId` from
     // `GoogleSignin.configure()` — see src/services/googleSignIn.ts.
     '@react-native-google-signin/google-signin',
+    // Custom Android background download module. Injects Kotlin sources,
+    // manifest permissions, gradle deps, and MainApplication.kt
+    // registration on every prebuild. Required because android/ is
+    // gitignored — see plugins/withBackgroundDownload/README.md.
+    './plugins/withBackgroundDownload',
   ],
   experiments: {
     typedRoutes: true,
