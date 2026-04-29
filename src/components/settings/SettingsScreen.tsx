@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
@@ -10,12 +11,52 @@ import { GhostButton } from '@/components/ui/GhostButton';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useModelDownload } from '@/hooks/useModelDownload';
+import { useModelStore } from '@/store/modelStore';
 
 export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
   const { state, progress, error, isActive, start, cancel } = useModelDownload();
+  const wifiOnly = useModelStore((s) => s.wifiOnly);
+  const setWifiOnly = useModelStore((s) => s.setWifiOnly);
+
+  // When the user kicks off a download from Settings, jump them to the
+  // dedicated DownloadingScreen — same UX as the first-launch flow
+  // (rotating tips, big progress, network badge). Avoids two divergent
+  // download UIs. Only fires when state transitions into 'downloading';
+  // routing back to chat happens naturally in the downloading route's
+  // onComplete handler when both files finish.
+  useEffect(() => {
+    if (state === 'downloading') {
+      // Cast: typed routes is strict about the (group) syntax even
+      // though it's a valid Expo Router URL.
+      router.push('/(downloading)' as never);
+    }
+  }, [state, router]);
+
+  // Tap to enable cellular: confirm first. Tap to switch back to
+  // Wi-Fi-only: no confirmation (the safer choice doesn't need a gate).
+  const onToggleWifiOnly = (next: boolean) => {
+    if (next) {
+      void setWifiOnly(true);
+      return;
+    }
+    Alert.alert(
+      'Allow cellular downloads?',
+      'Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Allow cellular',
+          style: 'destructive',
+          onPress: () => {
+            void setWifiOnly(false);
+          },
+        },
+      ],
+    );
+  };
 
   const onSignOut = async () => {
     await signOut();
@@ -66,6 +107,22 @@ export function SettingsScreen() {
         onStart={start}
         onCancel={cancel}
       />
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <View style={styles.rowBody}>
+            <Text style={styles.rowTitle}>Wi-Fi only</Text>
+            <Text style={styles.rowMeta}>
+              {wifiOnly ? 'Downloads pause until Wi-Fi is back.' : 'Cellular allowed.'}
+            </Text>
+          </View>
+          <Switch
+            value={wifiOnly}
+            onValueChange={onToggleWifiOnly}
+            trackColor={{ false: palette.paperEdge, true: palette.copper }}
+            thumbColor={palette.paper}
+          />
+        </View>
+      </View>
       <Text style={styles.privacyNote}>Conversations stay on this device.</Text>
 
       <View style={styles.sectionGap} />

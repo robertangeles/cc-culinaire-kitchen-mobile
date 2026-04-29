@@ -1,12 +1,29 @@
+import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
+import { STORAGE_KEYS } from '@/constants/config';
+
 export type ModelState = 'idle' | 'downloading' | 'ready' | 'error';
+
+/**
+ * Default to Wi-Fi-only downloads. Antoine is ~6 GB; surprising a user
+ * with that much cellular data is a bad first experience. They can opt
+ * in via Settings → "Allow cellular downloads" with a confirmation.
+ */
+const DEFAULT_WIFI_ONLY = true;
 
 interface ModelStoreState {
   state: ModelState;
   progress: number;
   error: string | null;
   isActive: boolean;
+  /** When true, the native worker waits for an unmetered network. */
+  wifiOnly: boolean;
+  /** True once the persisted preference has been read from SecureStore. */
+  isPrefsHydrated: boolean;
+
+  hydratePrefs: () => Promise<void>;
+  setWifiOnly: (value: boolean) => Promise<void>;
 
   setDownloading: (progress: number) => void;
   setReady: () => void;
@@ -20,6 +37,32 @@ export const useModelStore = create<ModelStoreState>((set) => ({
   progress: 0,
   error: null,
   isActive: false,
+  wifiOnly: DEFAULT_WIFI_ONLY,
+  isPrefsHydrated: false,
+
+  hydratePrefs: async () => {
+    try {
+      const stored = await SecureStore.getItemAsync(STORAGE_KEYS.downloadWifiOnly);
+      // Stored as "1" / "0" so a missing key is unambiguous and falls
+      // through to the Wi-Fi-only default.
+      if (stored === '0') {
+        set({ wifiOnly: false });
+      } else if (stored === '1') {
+        set({ wifiOnly: true });
+      }
+    } catch {
+      // SecureStore can fail on devices where the secure element is
+      // unavailable (rare, but real on rooted devices and some emulators).
+      // Fall back to the safe default rather than crashing app startup.
+    } finally {
+      set({ isPrefsHydrated: true });
+    }
+  },
+
+  setWifiOnly: async (value) => {
+    await SecureStore.setItemAsync(STORAGE_KEYS.downloadWifiOnly, value ? '1' : '0');
+    set({ wifiOnly: value });
+  },
 
   setDownloading: (progress) => set({ state: 'downloading', progress, error: null }),
   setReady: () => set({ state: 'ready', progress: 1, isActive: true, error: null }),

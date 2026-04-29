@@ -43,6 +43,14 @@ interface StartArgs {
   onProgress: (fraction: number) => void;
   onDone: () => void;
   onError?: (err: Error) => void;
+  /**
+   * When true, the native WorkManager constraint is `UNMETERED` and
+   * the worker waits for Wi-Fi. When false, any connected network is
+   * acceptable (cellular included). Caller is the source of truth —
+   * the service does NOT read it from the store directly to keep the
+   * dependency direction service ← hook ← store.
+   */
+  wifiOnly?: boolean;
   /** Accepted for back-compat with the v1 stub tests; ignored. */
   intervalMs?: number;
   /** Accepted for back-compat with the v1 stub tests; ignored. */
@@ -66,7 +74,7 @@ function getNativeModule(): BackgroundDownloadNativeModule | null {
   return (mod as BackgroundDownloadNativeModule | undefined) ?? null;
 }
 
-export function start({ onProgress, onDone, onError }: StartArgs): DownloadHandle {
+export function start({ onProgress, onDone, onError, wifiOnly = true }: StartArgs): DownloadHandle {
   let cancelled = false;
   let done = false;
 
@@ -190,6 +198,7 @@ export function start({ onProgress, onDone, onError }: StartArgs): DownloadHandl
               subdirectory: MODEL_SUBDIRECTORY,
               totalBytes: f.sizeBytes,
               sha256: f.sha256,
+              wifiOnly,
             })
             .then((id) => {
               fileNameToId[f.filename] = id;

@@ -42,6 +42,11 @@ export interface StartDownloadParams {
   subdirectory?: string;
   totalBytes?: number;
   sha256?: string | null;
+  /**
+   * When true, WorkManager waits for an unmetered (Wi-Fi) network
+   * before running the worker. The row stays QUEUED on cellular.
+   */
+  wifiOnly?: boolean;
 }
 
 export interface DownloadProgressEvent {
