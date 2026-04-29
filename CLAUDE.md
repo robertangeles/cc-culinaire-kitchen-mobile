@@ -948,14 +948,14 @@ Claude must:
     fix/ck-mob/chat-scroll-to-bottom
     hotfix/ck-mob/model-load-crash
 
-## CI Pipeline
+## Pre-push workflow
 
 When the user says "push" (or any equivalent like "ship it", "send it", "push this"), follow this full workflow:
 
 ### Before pushing
 
 0. Write tests for any new or changed logic if they don't already exist.
-1. Run `npm run lint && npx tsc --noEmit && npm test` — fix any failures before continuing.
+1. Run `pnpm lint && pnpm tsc --noEmit && pnpm test` — fix any failures before continuing.
 2. Commit all staged changes with a descriptive message.
 3. Ensure you are NOT on `main`. If you are, create an appropriately named branch first: `git checkout -b feat/...` or `fix/...` or `hotfix/...` etc.
 
@@ -963,9 +963,22 @@ When the user says "push" (or any equivalent like "ship it", "send it", "push th
 
 4. Push the branch: `git push -u origin <branch>`
 5. If no PR exists for this branch, create one with `gh pr create`. **Do NOT include any AI attribution in PR descriptions.**
-6. If a PR already exists, update its description to reflect **all commits in the PR** (not just the latest push). Read the full commit history with `git log ma
+6. If a PR already exists, update its description to reflect **all commits in the PR** (not just the latest push). Read the full commit history with `git log main..HEAD`.
 
 All steps must pass. No exceptions.
+
+## GitHub Actions CI
+
+Defined at `.github/workflows/ci.yml`. Runs on every PR to `main` and every push to `main`. Mirrors the pre-push gates above:
+
+- `pnpm install --frozen-lockfile` (fails fast on lockfile drift)
+- `pnpm lint`
+- `pnpm tsc --noEmit`
+- `pnpm test`
+
+Out of scope (deliberately, for now): contract tests (live backend; would need a secret), Android build (slow + JDK setup), Detox E2E (suite doesn't exist yet).
+
+If a PR's CI fails, fix the underlying issue locally and push again. Do NOT use `--no-verify` on the next commit to bypass — the local pre-commit hooks aren't what CI runs, but the same rule applies: investigate, don't bypass.
 
 ## Commit Message Format
 
