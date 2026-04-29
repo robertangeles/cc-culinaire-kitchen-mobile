@@ -9,6 +9,7 @@ export function useModelDownload() {
   const progress = useModelStore((s) => s.progress);
   const error = useModelStore((s) => s.error);
   const isActive = useModelStore((s) => s.isActive);
+  const wifiOnly = useModelStore((s) => s.wifiOnly);
   const setDownloading = useModelStore((s) => s.setDownloading);
   const setReady = useModelStore((s) => s.setReady);
   const setIdle = useModelStore((s) => s.setIdle);
@@ -18,6 +19,7 @@ export function useModelDownload() {
     if (handleRef.current) return;
     setDownloading(0);
     handleRef.current = startDownload({
+      wifiOnly,
       onProgress: setDownloading,
       onDone: () => {
         handleRef.current = null;
@@ -28,7 +30,7 @@ export function useModelDownload() {
         setError(e.message);
       },
     });
-  }, [setDownloading, setReady, setError]);
+  }, [setDownloading, setReady, setError, wifiOnly]);
 
   const cancel = useCallback(() => {
     handleRef.current?.cancel();

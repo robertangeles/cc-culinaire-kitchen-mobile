@@ -80,6 +80,14 @@ class BackgroundDownloadModule(
             params.getDouble("totalBytes").toLong()
         } else 0L
         val sha256 = params.getStringOrNull("sha256")
+        // wifiOnly = true → WorkManager refuses to run the worker on
+        // cellular; the row stays QUEUED until an unmetered network
+        // appears. Default to false so callers that don't pass the flag
+        // get the previous behaviour (any connected network).
+        val wifiOnly =
+            if (params.hasKey("wifiOnly") && !params.isNull("wifiOnly")) {
+                params.getBoolean("wifiOnly")
+            } else false
 
         // SSRF guard at the bridge too — fail fast before enqueueing.
         val host = runCatching { java.net.URI(url).host }.getOrNull()
@@ -120,7 +128,9 @@ class BackgroundDownloadModule(
                 .setInputData(Data.Builder().putString(DownloadWorker.KEY_DOWNLOAD_ID, downloadId).build())
                 .setConstraints(
                     Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .setRequiredNetworkType(
+                            if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED,
+                        )
                         .build(),
                 )
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)

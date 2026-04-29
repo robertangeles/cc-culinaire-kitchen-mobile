@@ -8,6 +8,7 @@ import { ASSISTANT_NAME } from '@/constants/config';
 import { COOKING_TIPS } from '@/constants/hellos';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useRotatingText } from '@/hooks/useRotatingText';
+import { useModelStore } from '@/store/modelStore';
 
 interface DownloadingScreenProps {
   /** 0..1 — current download progress, driven by useModelStore. */
@@ -35,6 +36,7 @@ const TIP_CADENCE_MS = 4_000;
 export function DownloadingScreen({ progress, onMount, onComplete }: DownloadingScreenProps) {
   const insets = useSafeAreaInsets();
   const { value: tip, index: tipIndex } = useRotatingText(COOKING_TIPS, TIP_CADENCE_MS);
+  const wifiOnly = useModelStore((s) => s.wifiOnly);
 
   // Fire onMount exactly once. The parent route is responsible for not
   // re-mounting unnecessarily; if it does, the underlying useModelDownload
@@ -51,7 +53,12 @@ export function DownloadingScreen({ progress, onMount, onComplete }: Downloading
   const pct = Math.round(progress * 100);
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top + spacing.s5 }]}>
+    <View
+      style={[
+        styles.root,
+        { paddingTop: insets.top + spacing.s5, paddingBottom: insets.bottom + spacing.s6 },
+      ]}
+    >
       <View style={styles.glyph}>
         <BrandGlyph size={280} />
       </View>
@@ -82,7 +89,14 @@ export function DownloadingScreen({ progress, onMount, onComplete }: Downloading
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${pct}%` }]} />
         </View>
-        <Text style={styles.progressLabel}>{pct}%</Text>
+        <View style={styles.progressMeta}>
+          <Text style={styles.progressLabel}>{pct}%</Text>
+          <View style={styles.networkBadge}>
+            <Text style={styles.networkBadgeText}>
+              {wifiOnly ? 'Wi-Fi only' : 'Cellular allowed'}
+            </Text>
+          </View>
+        </View>
       </View>
     </View>
   );
@@ -93,7 +107,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.bg,
     paddingHorizontal: spacing.s6,
-    paddingBottom: spacing.s6,
   },
   glyph: { alignItems: 'center', marginTop: spacing.s4 },
   title: {
@@ -138,6 +151,23 @@ const styles = StyleSheet.create({
   progressLabel: {
     ...type.uiSm,
     color: palette.inkMuted,
-    textAlign: 'right',
+  },
+  progressMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  networkBadge: {
+    backgroundColor: palette.copperTint,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  networkBadgeText: {
+    fontFamily: fonts.uiBold,
+    fontSize: 9,
+    letterSpacing: 1.62,
+    textTransform: 'uppercase',
+    color: palette.copperDeep,
   },
 });

@@ -1,12 +1,14 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { BrandGlyph } from '@/components/ui/BrandGlyph';
 import { CopperButton } from '@/components/ui/CopperButton';
 import { Eyebrow } from '@/components/ui/Eyebrow';
+import { ASSISTANT_NAME } from '@/constants/config';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuthStore } from '@/store/authStore';
+import { useModelStore } from '@/store/modelStore';
 
 interface OnboardingScreenProps {
   onDownload: () => void;
@@ -69,7 +71,33 @@ function DownloadIcon({ color }: { color: string }) {
 export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
+  const wifiOnly = useModelStore((s) => s.wifiOnly);
+  const setWifiOnly = useModelStore((s) => s.setWifiOnly);
   const firstName = (user?.userName ?? user?.userEmail ?? 'chef').split(/[ @]/)[0] ?? 'chef';
+
+  // Same Alert pattern as Settings: enabling Wi-Fi-only is the safe
+  // default and needs no prompt; opting in to cellular shows a
+  // confirmation because Antoine is ~6 GB.
+  const onToggleWifiOnly = (next: boolean) => {
+    if (next) {
+      void setWifiOnly(true);
+      return;
+    }
+    Alert.alert(
+      'Allow cellular downloads?',
+      'Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Allow cellular',
+          style: 'destructive',
+          onPress: () => {
+            void setWifiOnly(false);
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.s4 }]}>
@@ -100,14 +128,29 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
           sub="No signal in the walk-in? Still answers."
         />
         <PrivacyDot
-          label="Model download needs Wi-Fi"
-          sub="One-time, 5.9 GB. Pause and resume any time."
+          label="One-time download, ~5.9 GB"
+          sub="Pause and resume any time. Download policy below."
         />
       </View>
 
       <View style={styles.spacer} />
 
       <ModelCard />
+
+      <View style={styles.networkRow}>
+        <View style={styles.networkLabel}>
+          <Text style={styles.networkTitle}>Wi-Fi only</Text>
+          <Text style={styles.networkSub}>
+            {wifiOnly ? 'Recommended. Saves cellular data.' : 'Cellular allowed.'}
+          </Text>
+        </View>
+        <Switch
+          value={wifiOnly}
+          onValueChange={onToggleWifiOnly}
+          trackColor={{ false: palette.paperEdge, true: palette.copper }}
+          thumbColor={palette.paper}
+        />
+      </View>
 
       <View style={[styles.ctas, { paddingBottom: insets.bottom + spacing.s5 }]}>
         <CopperButton onPress={onDownload} leading={<DownloadIcon color={palette.textOnCopper} />}>
@@ -121,18 +164,25 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
 function ModelCard() {
   return (
     <View style={styles.card}>
-      <View style={styles.cardAvatar}>
-        <BrandGlyph size={36} compact />
-      </View>
-      <View style={styles.cardBody}>
-        <View style={styles.cardTitleRow}>
-          <Text style={styles.cardTitle}>Antoine</Text>
-          <View style={styles.cardBadge}>
-            <Text style={styles.cardBadgeText}>Recommended</Text>
-          </View>
+      <View style={styles.cardHeader}>
+        <View style={styles.cardAvatar}>
+          <BrandGlyph size={36} compact />
         </View>
-        <Text style={styles.cardMeta}>5.9 GB · runs locally on your phone</Text>
+        <View style={styles.cardBody}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Antoine</Text>
+            <View style={styles.cardBadge}>
+              <Text style={styles.cardBadgeText}>Recommended</Text>
+            </View>
+          </View>
+          <Text style={styles.cardMeta}>5.9 GB · runs locally on your phone</Text>
+        </View>
       </View>
+      <Text style={styles.cardCopy}>
+        This is the AI brain that powers {ASSISTANT_NAME}. Downloading it once means every question
+        — recipes, conversions, plating ideas — is answered on your phone, with no internet. Nothing
+        you ask leaves the device.
+      </Text>
     </View>
   );
 }
@@ -170,9 +220,7 @@ const styles = StyleSheet.create({
   dotSub: { ...type.bodySm, color: palette.inkSoft, marginTop: 2 },
   spacer: { flex: 1 },
   card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.s4,
+    gap: spacing.s3,
     backgroundColor: palette.paperDeep,
     borderColor: palette.copper,
     borderWidth: 1,
@@ -184,6 +232,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 4,
     marginBottom: spacing.s3,
+  },
+  cardHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.s4 },
+  cardCopy: {
+    ...type.bodySm,
+    color: palette.inkSoft,
+    lineHeight: 19,
   },
   cardAvatar: {
     width: 44,
@@ -213,6 +267,21 @@ const styles = StyleSheet.create({
     color: palette.copperDeep,
   },
   cardMeta: { ...type.caption, color: palette.inkMuted, marginTop: 2 },
+  networkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.s4,
+    backgroundColor: palette.paperDeep,
+    borderColor: palette.paperEdge,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.s4,
+    paddingVertical: spacing.s3,
+    marginBottom: spacing.s3,
+  },
+  networkLabel: { flex: 1, minWidth: 0 },
+  networkTitle: { ...type.h4, color: palette.ink },
+  networkSub: { ...type.bodySm, color: palette.inkMuted, marginTop: 2 },
   ctas: { gap: spacing.s2 + 2 },
   skipBtn: { height: 48, alignItems: 'center', justifyContent: 'center' },
   skip: { fontFamily: fonts.uiBold, fontSize: 14, color: palette.inkMuted },

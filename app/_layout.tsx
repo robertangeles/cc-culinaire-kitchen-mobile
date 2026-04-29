@@ -28,6 +28,7 @@ import migrations from '@/db/migrations/migrations';
 import { configureGoogleSignIn } from '@/services/googleSignIn';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+import { useModelStore } from '@/store/modelStore';
 
 // Configure Google Sign-In at module load (idempotent, safe to call before
 // any Google API call). Reads EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from config.
@@ -73,6 +74,7 @@ function RouteGuard() {
 export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isHydrated = useAuthStore((s) => s.isHydrated);
+  const hydrateModelPrefs = useModelStore((s) => s.hydratePrefs);
   const setDbReady = useConversationStore((s) => s.setDbReady);
   const { success: migrationsRan, error: migrationError } = useMigrations(db, migrations);
 
@@ -94,7 +96,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     void hydrate();
-  }, [hydrate]);
+    void hydrateModelPrefs();
+  }, [hydrate, hydrateModelPrefs]);
 
   useEffect(() => {
     if (migrationsRan) setDbReady(true);

@@ -71,4 +71,5 @@ export const STORAGE_KEYS = {
   authRefreshToken: 'ckm_auth_refresh_token',
   authUser: 'ckm_auth_user',
   modelDir: 'ckm_model_dir',
+  downloadWifiOnly: 'ckm_download_wifi_only',
 } as const;

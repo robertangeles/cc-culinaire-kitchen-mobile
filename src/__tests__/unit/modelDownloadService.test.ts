@@ -117,6 +117,8 @@ describe('modelDownloadService', () => {
       expect.arrayContaining([MODEL.files.main.filename, MODEL.files.mmproj.filename]),
     );
     expect(calls.every((c) => c.subdirectory === `models/${MODEL.id}/v1`)).toBe(true);
+    // Default: wifiOnly = true (caller passed nothing).
+    expect(calls.every((c) => c.wifiOnly === true)).toBe(true);
 
     fireProgress({
       downloadId: 'dl-1',
@@ -218,6 +220,16 @@ describe('modelDownloadService', () => {
 
     const lastFraction = onProgress.mock.calls.at(-1)?.[0] as number;
     expect(lastFraction).toBeCloseTo(MODEL.files.main.sizeBytes / 4 / MODEL.totalBytes, 4);
+  });
+
+  it('passes wifiOnly=false through to native when caller opts in to cellular', async () => {
+    service.start({ onProgress: jest.fn(), onDone: jest.fn(), wifiOnly: false });
+    await flushMicrotasks();
+    const calls = mockNative.startDownload.mock.calls.map(
+      ([params]) => params as Record<string, unknown>,
+    );
+    expect(calls).toHaveLength(2);
+    expect(calls.every((c) => c.wifiOnly === false)).toBe(true);
   });
 
   it('calls onError when __forceError is set, without touching native', async () => {
