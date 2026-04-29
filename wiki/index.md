@@ -26,6 +26,7 @@ The living knowledge base for this project.
 | [Background download architecture](concepts/background-download.md) | WorkManager + Room + OkHttp pattern: foreground service, range resume, SHA-256 verify, cross-launch adoption. The full plumbing shipped in PR #4.                       | 2026-04-29 |
 | [Expo Config Plugin pattern](concepts/expo-config-plugin.md)        | How to ship custom Android native code (Kotlin sources, manifest entries, gradle deps, MainApplication registration) that survives `prebuild --clean` and fresh clones. | 2026-04-29 |
 | [Privacy invariant](concepts/privacy-invariant.md)                  | The single non-negotiable rule (conversation content never leaves the device) and how each enforcement point in the codebase upholds it.                                | 2026-04-29 |
+| [Streaming architecture](concepts/streaming-architecture.md)        | How `llama.rn` tokens flow through a transient Zustand slice and a virtual ChatList bubble — no per-token SQLite writes, no schema change.                              | 2026-04-29 |
 
 ## Decisions — architectural decisions with rationale
 
@@ -34,6 +35,7 @@ The living knowledge base for this project.
 | [KSP over kapt](decisions/ksp-vs-kapt.md)                                              | Why Room's annotation processor uses KSP — kapt's worker JVM hits Windows tmpdir issues with sqlite-jdbc. PR #4.                               | 2026-04-29 |
 | [Wi-Fi-only default](decisions/wifi-only-default.md)                                   | Why the 6 GB download defaults to Wi-Fi only, why the toggle lives on Onboarding AND Settings, why no mid-download dialog. PR #5.              | 2026-04-29 |
 | [Auto-route from Settings to DownloadingScreen](decisions/auto-route-from-settings.md) | Why downloads triggered from Settings push to the dedicated DownloadingScreen route — single canonical UI, no duplicated tips/progress. PR #5. | 2026-04-29 |
+| [llama.rn inference parameters](decisions/llama-rn-inference-params.md)                | The exact n_ctx, n_predict, temperature, top_p, stop tokens, and threads — with the reasoning for each.                                        | 2026-04-29 |
 
 ## Synthesis — cross-cutting analysis
 

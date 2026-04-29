@@ -6,6 +6,7 @@ import {
   initLlama,
   type LlamaContext,
 } from '@/services/inferenceService';
+import { getMainModelPath } from '@/services/modelLocator';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 import { useModelStore } from '@/store/modelStore';
@@ -17,11 +18,15 @@ import type { InferenceMessage } from '@/types/inference';
 // causes infinite re-renders when there's no active conversation.
 const EMPTY_MESSAGES: Message[] = [];
 
+// Module-level context cache. Multi-second cold load on first message; cached
+// for the JS lifetime after that. TODO: invalidate on settings reconfigure
+// (release the context, set to null) once the path-override UI ships.
 let cachedContext: LlamaContext | null = null;
 
 async function ensureContext(): Promise<LlamaContext> {
   if (cachedContext) return cachedContext;
-  cachedContext = await initLlama({ model: 'antoine.gguf' });
+  const modelPath = await getMainModelPath();
+  cachedContext = await initLlama({ model: modelPath });
   return cachedContext;
 }
 
@@ -47,6 +52,10 @@ export function useAntoine() {
   );
   const addMessage = useConversationStore((s) => s.addMessage);
   const startNew = useConversationStore((s) => s.startNew);
+  const startStreaming = useConversationStore((s) => s.startStreaming);
+  const appendStreamingToken = useConversationStore((s) => s.appendStreamingToken);
+  const commitStreaming = useConversationStore((s) => s.commitStreaming);
+  const clearStreaming = useConversationStore((s) => s.clearStreaming);
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,10 +84,13 @@ export function useAntoine() {
           role: m.role === 'system' ? 'system' : m.role,
           content: m.content,
         }));
-        const result = await completion(ctx, { messages: buildMessageArray(history) });
-        const reply = makeMessage(conversationId, 'assistant', result.text);
-        await addMessage(conversationId, reply);
+        startStreaming(conversationId);
+        const result = await completion(ctx, { messages: buildMessageArray(history) }, (token) =>
+          appendStreamingToken(token),
+        );
+        await commitStreaming(conversationId, result.text);
       } catch (e) {
+        clearStreaming();
         const fallback = makeMessage(
           conversationId,
           'assistant',
@@ -92,7 +104,18 @@ export function useAntoine() {
         setIsThinking(false);
       }
     },
-    [userId, activeId, isModelActive, messages, addMessage, startNew],
+    [
+      userId,
+      activeId,
+      isModelActive,
+      messages,
+      addMessage,
+      startNew,
+      startStreaming,
+      appendStreamingToken,
+      commitStreaming,
+      clearStreaming,
+    ],
   );
 
   return { send, isThinking, error };

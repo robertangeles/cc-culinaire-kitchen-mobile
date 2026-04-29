@@ -3,7 +3,7 @@ title: Antoine — the on-device culinary AI
 category: entity
 created: 2026-04-29
 updated: 2026-04-29
-related: [[design-system]], [[screens]], [[on-device-inference]], [[privacy-invariant]]
+related: [[design-system]], [[screens]], [[on-device-inference]], [[privacy-invariant]], [[streaming-architecture]], [[llama-rn-inference-params]]
 ---
 
 Antoine is the AI persona that lives inside CulinAIre Mobile. He is a Gemma 3-4B multimodal model running entirely on the user's Android phone via `llama.rn`, with the voice of a calm head chef.
@@ -47,7 +47,7 @@ JS uses `BackgroundDownloadModule.getDocumentDirectory()` to discover the absolu
 1. **First launch.** User signs in → OnboardingScreen → tap "Get Antoine" → DownloadingScreen auto-fires the download (PR #3, PR #4).
 2. **Download** runs in a foreground WorkManager service. Survives backgrounding + process kill via Room persistence + HTTP 206 range resume. See [[background-download]].
 3. **Verification.** SHA-256 checked after each file lands; mismatch deletes + retries.
-4. **Inference.** `inferenceService.ts` loads the model on first chat. (Currently a stub returning canned responses — `llama.rn` integration is the next milestone, see [[project-status]].)
+4. **Inference.** `inferenceService.ts` loads the model on first chat via `llama.rn` (`initLlama`). Tokens stream back via the completion callback, accumulate in `conversationStore.streamingText`, render in a virtual chat bubble, then commit as a real SQLite row on completion. See [[streaming-architecture]] and [[llama-rn-inference-params]].
 5. **Persistence.** Conversations live in `expo-sqlite` via Drizzle (`ckm_conversation`, `ckm_message`). Never synced to backend.
 
 ## Why on-device

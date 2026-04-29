@@ -49,6 +49,14 @@ interface ConversationStore {
   activeId: string | null;
   messages: Record<string, Message[]>;
 
+  // Streaming slice. While Antoine is generating a reply, the partial text
+  // lives here in memory only — never written to SQLite per token. The
+  // ChatList renders an in-progress assistant bubble from this state when
+  // streamingConversationId === activeId. On completion, commitStreaming
+  // persists the final text as a real Message row and clears the slice.
+  streamingConversationId: string | null;
+  streamingText: string;
+
   setDbReady: (next: boolean) => void;
   hydrate: (userId: string) => Promise<void>;
   startNew: (userId: string) => Promise<string>;
@@ -56,6 +64,11 @@ interface ConversationStore {
   addMessage: (conversationId: string, message: Message) => Promise<void>;
   clearActive: () => Promise<void>;
   reset: () => void;
+
+  startStreaming: (conversationId: string) => void;
+  appendStreamingToken: (text: string) => void;
+  commitStreaming: (conversationId: string, finalText: string) => Promise<void>;
+  clearStreaming: () => void;
 }
 
 export const useConversationStore = create<ConversationStore>((set, get) => ({
@@ -63,6 +76,8 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
   conversations: [],
   activeId: null,
   messages: {},
+  streamingConversationId: null,
+  streamingText: '',
 
   setDbReady: (next) => set({ dbReady: next }),
 
@@ -137,5 +152,48 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     set((s) => ({ messages: { ...s.messages, [id]: [] } }));
   },
 
-  reset: () => set({ conversations: [], activeId: null, messages: {}, dbReady: db ? true : false }),
+  reset: () =>
+    set({
+      conversations: [],
+      activeId: null,
+      messages: {},
+      streamingConversationId: null,
+      streamingText: '',
+      dbReady: db ? true : false,
+    }),
+
+  startStreaming: (conversationId) =>
+    set({ streamingConversationId: conversationId, streamingText: '' }),
+
+  appendStreamingToken: (text) => set((s) => ({ streamingText: s.streamingText + text })),
+
+  commitStreaming: async (conversationId, finalText) => {
+    const id = `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const message: Message = {
+      id,
+      conversationId,
+      role: 'assistant',
+      content: finalText,
+      createdAt: Date.now(),
+    };
+    await messageQueries.insert({
+      id: message.id,
+      conversationId,
+      role: 'assistant',
+      content: finalText,
+      imageUri: null,
+      createdDttm: new Date(message.createdAt),
+    });
+    await conversationQueries.touch(conversationId);
+    set((s) => ({
+      messages: {
+        ...s.messages,
+        [conversationId]: [...(s.messages[conversationId] ?? []), message],
+      },
+      streamingConversationId: null,
+      streamingText: '',
+    }));
+  },
+
+  clearStreaming: () => set({ streamingConversationId: null, streamingText: '' }),
 }));

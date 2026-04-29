@@ -12,26 +12,33 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**Idle between milestones.** PRs #1–#5 shipped + merged. Wiki + tooling work is local and uncommitted.
+**llama.rn integration code-complete; awaiting device verification.** All JS/TS pieces landed locally on `feature/ck-mob/ci-workflow` (or the next branch — confirm with `git status`); device build + on-device sanity check pending.
 
 ## Last completed
 
+- **llama.rn integration (code path).** Replaced the stub in `src/services/inferenceService.ts` with real `llama.rn` calls. Added `src/services/modelLocator.ts` (resolves the GGUF path from the BackgroundDownloadModule's `getDocumentDirectory()` with SecureStore override). Added a streaming slice to `conversationStore` (`startStreaming` / `appendStreamingToken` / `commitStreaming` / `clearStreaming`). `useAntoine.send()` now streams tokens as the user watches Antoine type. `ChatList` renders a virtual in-progress bubble during streaming. Added `plugins/withLlamaRn` config plugin for the ProGuard keep rule. New tests: `inferenceService` (rewritten against llama.rn jest mock), `modelLocator`, `conversationStore.streaming`, integration `useAntoine.streaming`. Privacy audit clean. tsc + lint + 94 tests green.
 - PR #5 — Wi-Fi/cellular toggle + unified DownloadingScreen routing + safe-area fix. Merged.
-- Wiki bootstrap (12 pages + 1 raw doc) + tooling (`pnpm wiki:search/watch/graph/status`) + 4 automations (pre-commit, post-merge, status line, `/wiki-audit` command). All local, not yet committed.
 
 ## Currently in flight
 
-Nothing actively in progress. Local working directory has uncommitted wiki + tooling changes that should ship as their own PR (suggested branch: `feature/ck-mob/wiki-bootstrap`).
+The llama.rn integration is **not yet device-verified.** Next session must:
+
+1. Run `pnpm android` (triggers `expo prebuild` + native rebuild — first build will be long, llama.rn ships ~150 MB of native libs).
+2. On the Moto G86 Power: ask Antoine "How do I rescue broken hollandaise?" → confirm reply streams token-by-token from real Gemma weights.
+3. Multi-turn: confirm Antoine refers back to earlier turns.
+4. Record steady-state RAM via `adb shell dumpsys meminfo com.anonymous.ccculinairekitchenmob`. Add the number to [[llama-rn-inference-params]].
+5. Commit + open PR.
 
 ## Next action — pick one
 
-1. **Commit the wiki + tooling work as PR #6.** Recommended before starting new code work so the wiki state is shared.
-2. **Start `llama.rn` integration** — the largest pending milestone. Replaces the stub in `src/services/inferenceService.ts`. The Antoine model files are already on disk (verified PR #4). Probably warrants its own session due to scope.
-3. **Smaller follow-ups** — `react-native-iap` for Google Play Billing; `Detox` E2E suite. Both are P1/P2 in `tasks/todo.md` but lower-impact than llama.rn.
+1. **Device verify llama.rn (recommended).** Fastest path to MVP. Likely surfaces small fixes (cold-load UX, peer-dep mismatches, stop-token leakage) — keep them small.
+2. **Streaming polish.** Token throttling (only if device shows render thrash) and a "stop generating" button. Defer unless device run reveals a need.
+3. **`react-native-iap` for Google Play Billing.** Independent track from inference; can run in parallel.
 
 ## Open questions / blockers
 
-- None right now.
+- llama.rn 0.11.5 ships native libs for arm64-v8a + x86_64. Moto G86 Power is arm64 → fine. iOS path is untested.
+- The cached `LlamaContext` in `useAntoine.ts` is module-level; a future settings path-override UI must call `releaseAllLlama()` and reset the cache. TODO comment is in place.
 
 ## How to update this page
 

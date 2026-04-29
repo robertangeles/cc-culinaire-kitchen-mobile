@@ -4,6 +4,46 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-04-29 — llama.rn integration (code path) — Antoine speaks for real
+
+**What shipped (locally; awaiting device verification before PR).**
+
+Replaced the 96-line stub at `src/services/inferenceService.ts` with a real `llama.rn` integration. Public API preserved: `initLlama`, `completion`, `releaseAllLlama`, `buildMessageArray`, `__forceError` — but `completion` now accepts an optional `onToken` callback that streams tokens as the model produces them. Stop tokens (`<end_of_turn>`, `<|end_of_turn|>`, `<eos>`, `</s>`, `<|endoftext|>`) are filtered out of the streaming callback so they never leak into rendered text.
+
+New file: `src/services/modelLocator.ts` — resolves the absolute GGUF path from `BackgroundDownloadModule.getDocumentDirectory()` with a SecureStore override key (`STORAGE_KEYS.modelDir`) for a future settings reconfig UI. Includes `verifyModelFiles()` that uses `expo-file-system/legacy` to confirm both files (main + mmproj) are on disk.
+
+Streaming slice added to `useConversationStore`: `streamingConversationId` + `streamingText` state, `startStreaming` / `appendStreamingToken` / `commitStreaming` / `clearStreaming` actions. Transient Zustand state — never written to SQLite per token. The completed reply commits as a single `INSERT` once the model finishes.
+
+`useAntoine.send()` now calls `getMainModelPath()` instead of the hard-coded `'antoine.gguf'`, and wraps the inference call with `startStreaming → completion(ctx, params, onToken) → commitStreaming`. Error path goes through `clearStreaming + addMessage(fallback)`.
+
+`ChatList` subscribes to `streamingText` and `streamingConversationId`, renders a virtual in-progress bubble (id `__streaming__`) at the bottom of the list when streaming targets the active conversation. The committed assistant bubble swaps in seamlessly when streaming ends.
+
+New config plugin: `plugins/withLlamaRn` adds the `-keep class com.rnllama.** { *; }` ProGuard rule to `android/app/proguard-rules.pro` idempotently across prebuilds. Required for release builds (R8 minification would strip llama.rn's native classes otherwise).
+
+Tests rewritten + added:
+
+- `src/__tests__/unit/inferenceService.test.ts` — rewritten against `llama.rn/jest/mock`. 8 assertions: init returns wrapped context, init force-error throws, completion returns mocked text + tokensUsed, streaming callback fires per token, completion forwards messages with system prompt at index 0, completion force-error throws, releaseAllLlama resolves, buildMessageArray prepends Antoine's system prompt.
+- `src/__tests__/unit/modelLocator.test.ts` — 6 assertions: native fallback, SecureStore override, mmproj path, verifyModelFiles ok, verifyModelFiles missing, error when neither override nor native module is available.
+- `src/__tests__/unit/conversationStore.streaming.test.ts` — 5 assertions on the streaming slice.
+- `src/__tests__/integration/useAntoine.streaming.test.tsx` — 3 assertions on the end-to-end flow including error and pre-model-active fallback paths.
+
+Test infrastructure updates in `jest.setup.ts`: mock `expo-sqlite` (so `db/client.ts` can be imported without crashing on `openDatabaseSync`); `require('llama.rn/jest/mock')`; `beforeAll` installs the JSI globals and overrides `llamaGetFormattedChat` so the JS-side "Prompt is required" guard passes when only `messages` is sent.
+
+Privacy audit: `grep -rEn "fetch|axios|http|XMLHttpRequest|WebSocket" src/services/inferenceService.ts` returns zero matches (re-worded the docstring so even the comment doesn't trip the audit).
+
+**Wiki updates.**
+
+- New: `wiki/decisions/llama-rn-inference-params.md` — n_ctx=2048, n_predict=1024, temperature=0.7, top_p=0.9, n_threads=4, stop tokens, with reasoning for each. Notes follow-ups: bump n_ctx after measuring RSS on device; try GPU offload if tokens/sec is low; add repeat_penalty if responses loop.
+- New: `wiki/concepts/streaming-architecture.md` — the transient Zustand slice + virtual ChatList bubble pattern, why no per-token SQLite writes, why no token throttling yet, race-condition handling for navigate-mid-stream and parallel sends.
+- Updated: `wiki/entities/antoine.md` — lifecycle step 4 now describes the real inference flow, with crosslinks to the two new pages.
+- Updated: `wiki/synthesis/in-flight.md` — moved llama.rn (code path) to "Last completed", set "Currently in flight" to device verification, listed concrete next-session steps.
+- Updated: `wiki/synthesis/project-status.md` — milestone status now reads "code-complete, awaiting device verification" with the deferred-followups list.
+- Updated: `wiki/index.md` — added the two new pages.
+
+**What's NOT done.** Device verification on the Moto G86 Power. `pnpm android` will trigger the `expo prebuild` + native rebuild. First build is long (llama.rn ships ~150 MB of native libs across arm64-v8a + x86_64). After that, send a real culinary question and watch Antoine type the reply.
+
+---
+
 ## 2026-04-29 — Added `wiki/synthesis/in-flight.md` for cross-session continuity
 
 **Problem.** Each new Claude session starts fresh. The TodoWrite list (the most precise picture of "where we are") evaporates at session end. Without a deliberate breadcrumb, the next Claude has to infer the next action from `project-status.md` + `tasks/todo.md` + recent git log — and might guess wrong.
