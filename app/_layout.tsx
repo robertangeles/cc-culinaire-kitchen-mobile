@@ -44,9 +44,15 @@ function RouteGuard() {
 
   useEffect(() => {
     if (!isHydrated) return;
+    // Treat segments as a plain string array. Expo's typed-routes narrowing
+    // depends on `.expo/types/router.d.ts` being present, which is generated
+    // by the Expo CLI but NOT committed (`.expo/` is gitignored). CI does a
+    // fresh install + tsc with no generated types, which makes `useSegments()`
+    // fall back to a restrictive default tuple type that errors on `segments[1]`.
+    const segs = segments as readonly string[];
     const inAuthFlow =
-      segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
-    const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
+      segs[0] === '(welcome)' || segs[0] === '(auth)' || segs[0] === '(onboarding)';
+    const onVerifyEmail = segs[0] === '(auth)' && segs[1] === 'verify-email';
 
     if (!user) {
       // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
@@ -63,7 +69,7 @@ function RouteGuard() {
 
     // Fully verified: kick out of welcome + (auth) screens (these only make
     // sense when logged out or unverified).
-    if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
+    if (segs[0] === '(welcome)' || segs[0] === '(auth)') {
       router.replace('/(tabs)/chat');
     }
   }, [user, isHydrated, segments, router]);
