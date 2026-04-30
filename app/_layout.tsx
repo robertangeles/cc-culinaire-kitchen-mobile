@@ -26,6 +26,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
 import { configureGoogleSignIn } from '@/services/googleSignIn';
+import { refreshAndCache as refreshAntoinePrompt } from '@/services/promptCacheService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 import { useModelStore } from '@/store/modelStore';
@@ -97,6 +98,10 @@ export default function RootLayout() {
   useEffect(() => {
     void hydrate();
     void hydrateModelPrefs();
+    // Boot-time prompt refresh. Best-effort — if the user is offline the
+    // cached prompt (or the baked-in fallback) is used by the next chat
+    // message via getActivePrompt(). Never blocks app launch.
+    void refreshAntoinePrompt().catch(() => undefined);
   }, [hydrate, hydrateModelPrefs]);
 
   useEffect(() => {

@@ -63,11 +63,24 @@ export interface VerifyResult {
   missing: string[];
 }
 
+/**
+ * `expo-file-system`'s `getInfoAsync` expects a URI-style path
+ * (`file://...`), not a bare filesystem path. The native
+ * BackgroundDownloadModule's `getDocumentDirectory()` returns a bare
+ * path like `/data/user/0/<pkg>/files`, so we prepend `file://` here
+ * for the existence check. Without this, getInfoAsync silently returns
+ * `{exists: false}` even when the file is on disk.
+ */
+function toFileUri(path: string): string {
+  if (path.startsWith('file://')) return path;
+  return `file://${path}`;
+}
+
 export async function verifyModelFiles(): Promise<VerifyResult> {
   const [main, mmproj] = await Promise.all([getMainModelPath(), getMmprojPath()]);
   const [mainInfo, mmInfo] = await Promise.all([
-    FileSystem.getInfoAsync(main),
-    FileSystem.getInfoAsync(mmproj),
+    FileSystem.getInfoAsync(toFileUri(main)),
+    FileSystem.getInfoAsync(toFileUri(mmproj)),
   ]);
   const missing: string[] = [];
   if (!mainInfo.exists) missing.push(MODEL.files.main.filename);

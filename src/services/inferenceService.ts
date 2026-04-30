@@ -17,14 +17,31 @@
  *   this file.
  */
 import {
+  addNativeLogListener,
   initLlama as nativeInitLlama,
   type LlamaContext as NativeLlamaContext,
   releaseAllLlama as nativeReleaseAll,
+  toggleNativeLog,
   type TokenData,
 } from 'llama.rn';
 
 import { ANTOINE_SYSTEM_PROMPT } from '@/constants/antoine';
 import type { InferenceMessage, InferenceResult } from '@/types/inference';
+
+// Surface llama.cpp's native stderr (model load failures, gguf format
+// errors, mmap/OOM messages) to the JS side once at module load. Without
+// this, llama.rn swallows the underlying reason and you only see the
+// generic "unable to load model" wrapper message in logcat. Routed
+// through console.warn so it shows up in `adb logcat ReactNativeJS:V`.
+let nativeLogEnabled = false;
+function enableNativeLogOnce(): void {
+  if (nativeLogEnabled) return;
+  nativeLogEnabled = true;
+  void toggleNativeLog(true).catch(() => undefined);
+  addNativeLogListener((level, text) => {
+    console.warn(`[llama.rn:${level}] ${text}`);
+  });
+}
 
 /**
  * Wrapper around llama.rn's native context. We keep our own opaque shape
@@ -43,8 +60,20 @@ export interface InitOptions {
   model: string;
   /** Reserved for multimodal — unused this milestone. */
   mmproj?: string;
-  /** KV cache size in tokens. Default 2048 — conservative for 8 GB phones. */
+  /**
+   * KV cache size in tokens. Default 1024 — chosen to fit alongside the
+   * Antoine gemma4 model on an 8 GB phone. Empirically, n_ctx=2048 with
+   * the model's ~2.8 GB of CPU_REPACK buffers + JS runtime + Android
+   * system OOM-killed the app during prefill on the Moto G86 Power.
+   */
   contextSize?: number;
+  /**
+   * Prefill batch size in tokens. Default 256. llama.cpp's default of 2048
+   * allocates a compute buffer sized for a 2048-token prefill at once,
+   * which is excessive when our prompts are small and memory is tight.
+   * Smaller n_batch trades a little prefill speed for lower peak memory.
+   */
+  batchSize?: number;
   /** CPU thread count for inference. Default 4. */
   threadCount?: number;
 }
@@ -71,11 +100,22 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   if (__forceError.value) {
     throw new Error('Couldn’t load Antoine. Check the model files in Settings.');
   }
+  enableNativeLogOnce();
   const native = await nativeInitLlama({
     model: options.model,
-    n_ctx: options.contextSize ?? 2048,
+    n_ctx: options.contextSize ?? 1536,
+    n_batch: options.batchSize ?? 256,
+    n_ubatch: options.batchSize ?? 256,
     n_threads: options.threadCount ?? 4,
     n_gpu_layers: 0,
+    // Skip the SIMD-optimized weight repack (CPU_REPACK buffer in load
+    // logs). On the Moto G86 Power, the repack adds a ~2.8 GB heap
+    // allocation on top of the 5 GB mmap'd weights, which combined with
+    // the JS runtime and Android system pushes total RAM past the
+    // device's ~8 GB ceiling and triggers the kernel low-memory killer.
+    // Without repack, prompt processing is slower (no NEON-optimized
+    // kernel), but the app actually survives long enough to answer.
+    no_extra_bufts: true,
   });
   return { id: native.id, modelPath: options.model, native };
 }
@@ -91,10 +131,21 @@ export async function completion(
   const result = await ctx.native.completion(
     {
       messages: params.messages,
-      n_predict: 1024,
+      // n_ctx is 1536. n_predict eats from the same budget as input. On
+      // the first RAG turn (system + 2 chunks + user), input is ~700
+      // tokens; n_predict=384 leaves headroom and still produces a
+      // 150-200 word answer — plenty for a culinary reply.
+      n_predict: 384,
       temperature: 0.7,
       top_p: 0.9,
       stop: [...STOP_TOKENS],
+      // Disable Gemma's <|channel|>thought reasoning block. The kwarg is
+      // typed as Record<string, string> and rendered through Jinja —
+      // where ANY non-empty string is truthy, so the literal "false"
+      // counts as truthy and would leave thinking enabled. Empty string
+      // is the falsy value Jinja respects. (Confirmed empirically: the
+      // string "false" did not suppress the <|channel>thought block.)
+      chat_template_kwargs: { enable_thinking: '' },
     },
     onToken
       ? (data: TokenData) => {

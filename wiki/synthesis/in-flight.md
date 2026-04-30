@@ -2,8 +2,8 @@
 title: In flight — what's being worked on right now
 category: synthesis
 created: 2026-04-29
-updated: 2026-04-29
-related: [[project-status]]
+updated: 2026-04-30
+related: [[project-status]], [[model-quantization-must-be-mainline]], [[rag-architecture]], [[server-managed-prompts]], [[privacy-invariant]]
 ---
 
 The single source of truth for "where we are right now". Updated at the end of every session and read at the start of every new one. Always short (under 30 lines).
@@ -12,47 +12,49 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**llama.rn integration code-complete; awaiting device verification.** All JS/TS pieces landed locally on `feature/ck-mob/ci-workflow` (or the next branch — confirm with `git status`); device build + on-device sanity check pending.
+**RAG + dynamic system prompt code-complete and tested; pending device verification.** The full chat path now reads: persist user → fetch cached server prompt + retrieve RAG chunks (parallel) → ensure llama.rn context → completion(messages = [system prompt, RAG block, history, user]) → stream tokens → commit assistant message with Sources footer. 122 tests passing across 23 suites; tsc + lint clean.
+
+The 10-star moment is unblocked: web-served prompt + corpus-grounded answers + on-device inference + privacy invariant intact (only the current query crosses the boundary).
+
+Local working tree: branch `feature/ck-mob/llama-rn-integration` has unpushed work spanning the llama.rn upgrade to 0.12.0-rc.5, the four device-session hotfixes, the new `promptCacheService` + `ragService`, the `useAntoine` rewrite, the streaming-stage UX, the keyboard fix, and today's wiki updates. Web pin advanced to `8a72295` (RAG endpoint deploy).
 
 ## Last completed
 
-- **llama.rn integration (code path).** Replaced the stub in `src/services/inferenceService.ts` with real `llama.rn` calls. Added `src/services/modelLocator.ts` (resolves the GGUF path from the BackgroundDownloadModule's `getDocumentDirectory()` with SecureStore override). Added a streaming slice to `conversationStore` (`startStreaming` / `appendStreamingToken` / `commitStreaming` / `clearStreaming`). `useAntoine.send()` now streams tokens as the user watches Antoine type. `ChatList` renders a virtual in-progress bubble during streaming. Added `plugins/withLlamaRn` config plugin for the ProGuard keep rule. New tests: `inferenceService` (rewritten against llama.rn jest mock), `modelLocator`, `conversationStore.streaming`, integration `useAntoine.streaming`. Privacy audit clean. tsc + lint + 94 tests green.
-- PR #5 — Wi-Fi/cellular toggle + unified DownloadingScreen routing + safe-area fix. Merged.
+- **RAG retrieval wired.** `src/services/ragService.ts` wraps `POST /api/mobile/rag/retrieve`, 3s hard timeout, silent fallback to `[]` on every failure mode. Citation-aware `[n]` formatting. Unit tests cover request shape, response handling, error fallbacks, timeout.
+- **Dynamic system prompt fetched + cached.** `src/services/promptCacheService.ts` fetches `GET /api/mobile/prompts/antoine-system-prompt` on boot, caches in SecureStore with version comparison, falls back to baked-in `ANTOINE_SYSTEM_PROMPT` when offline.
+- **`useAntoine.send()` rewritten.** Three-stage streaming bubble (`retrieving` → `warming` → `streaming`), parallel prompt + RAG fetch, Sources footer appended on commit.
+- **Streaming-bubble UX.** `ChatList` now renders virtual bubble whenever `streamingStage !== null`; subtitles "Antoine is consulting your library…" / "Antoine is warming up…" surface the silent gaps the user flagged earlier.
+- **Keyboard dismiss fix.** Replaced `useAnimatedKeyboard` with explicit `Keyboard.addListener` + `withTiming` (Android 14+ edge-to-edge bug).
+- **Cross-project shared dir at `../cc-culinaire-shared-context/`** seeded with `model-config.md` (mobile-owned) per CLAUDE.md ownership rules.
+- **Tests.** 13 unit (`promptCacheService`), 11 unit (`ragService`), 7 integration (`useAntoine.streaming` rewrite covering RAG injection, Sources footer, fallback paths).
+- **Wiki.** `privacy-invariant.md` rewritten for the queries-leave/responses-stay boundary; new `concepts/rag-architecture.md`; new `decisions/server-managed-prompts.md`; `entities/antoine.md` gets Knowledge sources section.
 
 ## Currently in flight
 
-The llama.rn integration is **not yet device-verified.** Next session must:
+Nothing blocked. Code-complete. Awaiting commit + device verification.
 
-1. Run `pnpm android` (triggers `expo prebuild` + native rebuild — first build will be long, llama.rn ships ~150 MB of native libs).
-2. On the Moto G86 Power: ask Antoine "How do I rescue broken hollandaise?" → confirm reply streams token-by-token from real Gemma weights.
-3. Multi-turn: confirm Antoine refers back to earlier turns.
-4. Record steady-state RAM via `adb shell dumpsys meminfo com.anonymous.ccculinairekitchenmob`. Add the number to [[llama-rn-inference-params]].
-5. Commit + open PR.
+## Next action
 
-## Next action — pick one
-
-1. **Device verify llama.rn (recommended).** Fastest path to MVP. Likely surfaces small fixes (cold-load UX, peer-dep mismatches, stop-token leakage) — keep them small.
-2. **Streaming polish.** Token throttling (only if device shows render thrash) and a "stop generating" button. Defer unless device run reveals a need.
-3. **`react-native-iap` for Google Play Billing.** Independent track from inference; can run in parallel.
+1. **Commit + push.** Stage the llama.rn upgrade, the four hotfixes, the RAG/prompt services, hook + UI updates, tests, and wiki. Single feature branch, single PR.
+2. **Device verification.** With Metro reloaded and the new app installed:
+   - Ask "Why does my hollandaise break?" → confirm streaming bubble shows "consulting your library…" → "warming up…" → tokens stream → Sources footer renders with `[1] On Food and Cooking` etc.
+   - Multi-turn: ask follow-up. Confirm prior turn's chunks aren't re-sent (each query gets fresh retrieval); confirm history is included.
+   - Airplane mode: ask a question. RAG fetches fail silently (3s); Antoine answers without citations using cached system prompt + history.
+   - Update server-side prompt via web admin → relaunch app → confirm new prompt active on next chat.
+3. **Open PR** with description summarizing the three subsystems (llama.rn integration, RAG, dynamic prompts) once verified.
 
 ## Open questions / blockers
 
-- llama.rn 0.11.5 ships native libs for arm64-v8a + x86_64. Moto G86 Power is arm64 → fine. iOS path is untested.
-- The cached `LlamaContext` in `useAntoine.ts` is module-level; a future settings path-override UI must call `releaseAllLlama()` and reset the cache. TODO comment is in place.
-
-## How to update this page
-
-End of every session, before stopping:
-
-1. Move what was just completed into "Last completed" (keep only the 2–3 most recent — older work belongs in `wiki/log.md`).
-2. Update "Currently in flight" to reflect what got paused mid-flight, if anything (a branch name, an open PR number, a function half-written).
-3. Update "Next action" to the _one or two_ concrete next steps.
-4. Append today's session summary to `wiki/log.md` for the long-form record.
-
-If a session ended with no in-flight work and no obvious next step, write that explicitly: "Idle between milestones. User to pick direction." That's a valid state.
+- llama.rn 0.12.0-rc.5 is the pin (last RC with prebuilt JNI libs). Future bump to a stable 0.12.0 will need source-build + Python 3.14/CMake 3.22 fix.
+- The cached `LlamaContext` is module-level; a future settings path-override UI must call `releaseAllLlama()` and reset the cache. TODO comment is in place.
+- Latent: duplicate-Q4_K_M-row race in `modelDownloadService.start()` — two concurrent `start()` calls create duplicate Room rows. Doesn't cause file deletion but is messy.
+- The `apiClient.post` doesn't yet thread an `AbortSignal`, so the 3s RAG timeout drops the response but doesn't cancel the fetch. Cheap follow-up.
 
 ## See also
 
 - [[project-status]] — slow-changing narrative of shipped milestones
+- [[rag-architecture]] — the data flow shipped today
+- [[server-managed-prompts]] — the cache-with-fallback pattern shipped today
+- [[privacy-invariant]] — the rule that the new query-leaves boundary refines
+- [[model-quantization-must-be-mainline]] — why mainline llama.cpp tooling is the only way
 - `wiki/log.md` — append-only history
-- `tasks/todo.md` — prioritized roadmap

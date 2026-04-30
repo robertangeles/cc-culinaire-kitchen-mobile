@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 
 import { start as startDownload, type DownloadHandle } from '@/services/modelDownloadService';
 import { useModelStore } from '@/store/modelStore';
@@ -38,12 +38,14 @@ export function useModelDownload() {
     setIdle();
   }, [setIdle]);
 
-  useEffect(() => {
-    return () => {
-      handleRef.current?.cancel();
-      handleRef.current = null;
-    };
-  }, []);
+  // No unmount cleanup. The download is a long-running foreground service
+  // (WorkManager + Room) designed to survive backgrounding, screen
+  // unmounts, and process kills. Cancelling on unmount fires for every
+  // navigation — including the success path where DownloadingScreen
+  // unmounts after onDone routes to chat — and races worker SHA-256
+  // verification, marking COMPLETED files as user_cancelled and deleting
+  // them via the native cancelDownload. If the user wants to abort, they
+  // tap the explicit Cancel UI which calls the returned `cancel`.
 
   return { state, progress, error, isActive, start, cancel };
 }

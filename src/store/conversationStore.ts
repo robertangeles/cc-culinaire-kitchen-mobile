@@ -56,6 +56,14 @@ interface ConversationStore {
   // persists the final text as a real Message row and clears the slice.
   streamingConversationId: string | null;
   streamingText: string;
+  /**
+   * Stage indicator for the in-progress bubble UX.
+   *   - 'retrieving': RAG fetch + prompt cache lookup in flight (~0–3s)
+   *   - 'warming':    model load on cold start (~5–30s, first message only)
+   *   - 'streaming':  tokens are arriving (subtitle replaced with token text)
+   *   - null:         no stream in progress
+   */
+  streamingStage: 'retrieving' | 'warming' | 'streaming' | null;
 
   setDbReady: (next: boolean) => void;
   hydrate: (userId: string) => Promise<void>;
@@ -66,6 +74,7 @@ interface ConversationStore {
   reset: () => void;
 
   startStreaming: (conversationId: string) => void;
+  setStreamingStage: (stage: 'retrieving' | 'warming' | 'streaming' | null) => void;
   appendStreamingToken: (text: string) => void;
   commitStreaming: (conversationId: string, finalText: string) => Promise<void>;
   clearStreaming: () => void;
@@ -78,6 +87,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
   messages: {},
   streamingConversationId: null,
   streamingText: '',
+  streamingStage: null,
 
   setDbReady: (next) => set({ dbReady: next }),
 
@@ -159,11 +169,18 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       messages: {},
       streamingConversationId: null,
       streamingText: '',
+      streamingStage: null,
       dbReady: db ? true : false,
     }),
 
   startStreaming: (conversationId) =>
-    set({ streamingConversationId: conversationId, streamingText: '' }),
+    set({
+      streamingConversationId: conversationId,
+      streamingText: '',
+      streamingStage: 'retrieving',
+    }),
+
+  setStreamingStage: (stage) => set({ streamingStage: stage }),
 
   appendStreamingToken: (text) => set((s) => ({ streamingText: s.streamingText + text })),
 
@@ -192,8 +209,10 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       },
       streamingConversationId: null,
       streamingText: '',
+      streamingStage: null,
     }));
   },
 
-  clearStreaming: () => set({ streamingConversationId: null, streamingText: '' }),
+  clearStreaming: () =>
+    set({ streamingConversationId: null, streamingText: '', streamingStage: null }),
 }));
