@@ -109,8 +109,16 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // colliding with the Android low-memory killer. With both weights
     // and KV at Q4_0 the device has headroom — verified empirically.
     n_ctx: options.contextSize ?? 2048,
-    n_batch: options.batchSize ?? 256,
-    n_ubatch: options.batchSize ?? 256,
+    // Bumped 256 → 512 on 2026-04-30 (Stage 1 of inference-tuning sweep).
+    // 256 was the survival ceiling on Q4_K_M weights where the compute
+    // buffer + repack heap collided with Android's low-memory killer.
+    // With Q4_0 weights (no repack) and Q4_0 KV cache the device has
+    // headroom; doubling the prefill batch should ~2× the per-pass token
+    // throughput. Compute buffer was 261 MiB at 256, scales roughly
+    // linearly so ~520 MiB at 512 — still well under the ceiling.
+    // off-grid-mobile-ai (alichherawalla, 2025) uses 512 as default.
+    n_batch: options.batchSize ?? 512,
+    n_ubatch: options.batchSize ?? 512,
     n_threads: options.threadCount ?? 4,
     n_gpu_layers: 0,
     // No-op for Q4_0 weights (Q4_0 has no repack buffer to skip), but
