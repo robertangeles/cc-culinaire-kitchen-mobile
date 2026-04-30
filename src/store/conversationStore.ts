@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { db } from '@/db/client';
 import * as conversationQueries from '@/db/queries/conversations';
 import * as messageQueries from '@/db/queries/messages';
+import type { RagChunk } from '@/services/ragService';
 import type { Conversation, Message } from '@/types/chat';
 
 function rowToMessage(r: {
@@ -65,6 +66,24 @@ interface ConversationStore {
    */
   streamingStage: 'retrieving' | 'warming' | 'streaming' | null;
 
+  /**
+   * RAG chunks frozen per conversation. The first user message in a
+   * conversation triggers `retrieve()`; on a non-empty result, the
+   * chunks are stored here and reused on every subsequent turn within
+   * the same conversation. This stabilises the message-array structure
+   * so llama.cpp's automatic prompt cache reuses the prefix across
+   * turns instead of re-prefilling 700+ tokens of system prompt + RAG
+   * block on every send.
+   *
+   * Empty results are NOT cached — the next turn retries naturally
+   * (so a conversation that opens with chitchat and then asks a real
+   * culinary question still gets RAG help on the real question).
+   *
+   * In-memory only; not persisted to SQLite. Lost on app restart, which
+   * is fine — the next first-turn fetch repopulates from the web.
+   */
+  ragChunksByConversation: Record<string, RagChunk[]>;
+
   setDbReady: (next: boolean) => void;
   hydrate: (userId: string) => Promise<void>;
   startNew: (userId: string) => Promise<string>;
@@ -78,6 +97,20 @@ interface ConversationStore {
   appendStreamingToken: (text: string) => void;
   commitStreaming: (conversationId: string, finalText: string) => Promise<void>;
   clearStreaming: () => void;
+
+  /**
+   * Store the first-turn RAG chunks for a conversation. Called by
+   * `useAntoine.send()` only when the result was non-empty — empty
+   * arrays are intentionally not cached so the next turn retries.
+   */
+  setRagChunksForConversation: (conversationId: string, chunks: RagChunk[]) => void;
+  /**
+   * Drop the cached chunks for a conversation. Called when the user
+   * clears the conversation (`clearActive`) so the next message in the
+   * same conversation gets a fresh retrieval — the prior RAG context
+   * was tied to the deleted history.
+   */
+  clearRagChunksForConversation: (conversationId: string) => void;
 }
 
 export const useConversationStore = create<ConversationStore>((set, get) => ({
@@ -88,6 +121,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
   streamingConversationId: null,
   streamingText: '',
   streamingStage: null,
+  ragChunksByConversation: {},
 
   setDbReady: (next) => set({ dbReady: next }),
 
@@ -159,7 +193,17 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
     const id = get().activeId;
     if (!id) return;
     await messageQueries.deleteByConversation(id);
-    set((s) => ({ messages: { ...s.messages, [id]: [] } }));
+    set((s) => {
+      // Also drop the cached RAG chunks for this conversation so the
+      // next user message after the clear gets a fresh retrieval that
+      // matches whatever new direction the conversation takes.
+      const nextRag = { ...s.ragChunksByConversation };
+      delete nextRag[id];
+      return {
+        messages: { ...s.messages, [id]: [] },
+        ragChunksByConversation: nextRag,
+      };
+    });
   },
 
   reset: () =>
@@ -170,6 +214,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       streamingConversationId: null,
       streamingText: '',
       streamingStage: null,
+      ragChunksByConversation: {},
       dbReady: db ? true : false,
     }),
 
@@ -215,4 +260,16 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
 
   clearStreaming: () =>
     set({ streamingConversationId: null, streamingText: '', streamingStage: null }),
+
+  setRagChunksForConversation: (conversationId, chunks) =>
+    set((s) => ({
+      ragChunksByConversation: { ...s.ragChunksByConversation, [conversationId]: chunks },
+    })),
+
+  clearRagChunksForConversation: (conversationId) =>
+    set((s) => {
+      const next = { ...s.ragChunksByConversation };
+      delete next[conversationId];
+      return { ragChunksByConversation: next };
+    }),
 }));

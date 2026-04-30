@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { completion, initLlama, type LlamaContext } from '@/services/inferenceService';
 import { getMainModelPath } from '@/services/modelLocator';
 import { getActivePrompt } from '@/services/promptCacheService';
-import { formatRagContext, retrieve } from '@/services/ragService';
+import { formatRagContext, retrieve, type RagChunk } from '@/services/ragService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 import { useModelStore } from '@/store/modelStore';
@@ -95,20 +95,49 @@ export function useAntoine() {
       setIsThinking(true);
       startStreaming(conversationId);
       try {
-        // Stage 1 — fetch system prompt from cache + retrieve RAG chunks
-        // in parallel. Both are best-effort: prompt falls back to baked-in
-        // default, RAG returns [] if endpoint is offline/missing.
+        // Stage 1 — fetch system prompt from cache + RAG chunks (cached
+        // per-conversation) in parallel. Both are best-effort: prompt
+        // falls back to baked-in default, RAG returns [] if endpoint is
+        // offline/missing.
+        //
+        // RAG chunks are cached at the conversation level. The first
+        // user message of a conversation triggers `retrieve()`; if it
+        // returns chunks, they're frozen for the rest of the
+        // conversation (every subsequent turn reuses them via
+        // Promise.resolve, no network call). This stabilises the
+        // message-array structure across turns so llama.cpp's automatic
+        // prompt cache reuses the prefix instead of re-prefilling 700+
+        // tokens of system prompt + RAG block on every send.
+        //
+        // Empty results are intentionally NOT cached: `chunks=0` is
+        // often a transient web-side miss (embedding service blip,
+        // conversational follow-up below the topic threshold). Leaving
+        // the cache `undefined` lets the next turn retry naturally —
+        // which matters when a conversation opens with chitchat and
+        // then asks a real culinary question on turn 2.
         setStreamingStage('retrieving');
-        console.info('[useAntoine] stage=retrieving — fetching prompt + RAG');
-        const [systemPrompt, ragChunks] = await Promise.all([
-          getActivePrompt(),
-          // limit=2 — even with chunks clipped to 400 chars, three 1500+
-          // char source chunks + the system prompt + chat-template
-          // wrappers were still overflowing n_ctx=1536.
-          retrieve(content, { limit: 2 }),
-        ]);
+        const cachedChunks =
+          useConversationStore.getState().ragChunksByConversation[conversationId];
+        const isFirstRagFetch = cachedChunks === undefined;
         console.info(
-          `[useAntoine] retrieving done — prompt=${systemPrompt.length}b chunks=${ragChunks.length}`,
+          `[useAntoine] stage=retrieving — fetching prompt${
+            isFirstRagFetch ? ' + RAG (first turn)' : ''
+          }${!isFirstRagFetch ? ` (RAG reused from cache, ${cachedChunks.length} chunks)` : ''}`,
+        );
+        const ragPromise: Promise<RagChunk[]> = isFirstRagFetch
+          ? retrieve(content, { limit: 2 })
+          : Promise.resolve(cachedChunks);
+        const [systemPrompt, ragChunks] = await Promise.all([getActivePrompt(), ragPromise]);
+        if (isFirstRagFetch && ragChunks.length > 0) {
+          // Freeze the first non-empty result for the rest of this
+          // conversation. We deliberately skip caching empty arrays so
+          // the next turn can retry retrieval.
+          useConversationStore.getState().setRagChunksForConversation(conversationId, ragChunks);
+        }
+        console.info(
+          `[useAntoine] retrieving done — prompt=${systemPrompt.length}b chunks=${ragChunks.length}${
+            isFirstRagFetch ? ` (cached=${ragChunks.length > 0})` : ' (reused)'
+          }`,
         );
 
         // Stage 2 — model load (cached after first call). The first

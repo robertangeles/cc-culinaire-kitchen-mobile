@@ -36,34 +36,37 @@ export const GOOGLE_WEB_CLIENT_ID: string =
 /**
  * Antoine model assets — hosted on Cloudflare R2 public bucket.
  *
- * Sizes verified via HEAD request on 2026-04-29; both files support
- * `Accept-Ranges: bytes` (required by the native background download
- * module's HTTP 206 resume logic).
+ * Quantization: Q4_0 main weights (re-quantized via mainline llama.cpp
+ * on 2026-04-30, replacing the prior Q4_K_M file). Q4_0 stores weights
+ * in a NEON-friendly layout that runs natively on ARM without the
+ * SIMD repack buffer that OOMs the 8 GB device — expected ~5× prefill
+ * speedup on the Moto G86 Power. Mmproj stays at BF16 (~945 MB) — same
+ * bytes as the prior antoine_mmproj.gguf, just renamed on R2.
  *
- * SHA-256 fields: computed via PowerShell `Get-FileHash -Algorithm SHA256`
- * on 2026-04-29 against the R2-hosted source files. The native
- * DownloadWorker compares these byte-for-byte against the file landed
- * on disk; mismatch deletes the file and surfaces FILE_CORRUPTED to JS.
- * Lowercased here because the worker calls .equals(ignoreCase = true).
+ * Sizes + SHA-256 verified via PowerShell `Get-FileHash` against the
+ * R2-hosted files on 2026-04-30. The native DownloadWorker compares
+ * SHA byte-for-byte against the file landed on disk; mismatch deletes
+ * the file and surfaces FILE_CORRUPTED to JS. Lowercased here because
+ * the worker calls .equals(ignoreCase = true).
  */
 export const MODEL = {
   id: 'antoine',
   displayName: 'Antoine',
   files: {
     main: {
-      filename: 'antoine_mobile_gemma3n.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine_mobile_gemma3n.gguf',
-      sizeBytes: 5_335_289_664,
-      sha256: 'eb45850d7893f9355dc8caa90b0ae516a8e71d91c80c4126e1df68d63b2602dc',
+      filename: 'antoine-v2-q4_0.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine-v2-q4_0.gguf',
+      sizeBytes: 5_185_929_024,
+      sha256: '86b4b9d898bb65c771fcbd1e64c7ac80465c669ac1388ecb84963409b2e74481',
     },
     mmproj: {
-      filename: 'antoine_mmproj.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine_mmproj.gguf',
+      filename: 'antoine-v2-mmproj-bf16.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine-v2-mmproj-bf16.gguf',
       sizeBytes: 991_551_840,
       sha256: '737485f56225fc61a1468711c4bb07c2b0b9f7f94db0c4cc5feb9aaae429938b',
     },
   },
-  totalBytes: 5_335_289_664 + 991_551_840,
+  totalBytes: 5_185_929_024 + 991_551_840,
 } as const;
 
 export const STORAGE_KEYS = {

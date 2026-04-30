@@ -101,6 +101,7 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
       streamingConversationId: null,
       streamingText: '',
       streamingStage: null,
+      ragChunksByConversation: {},
       dbReady: true,
     });
   });
@@ -292,5 +293,126 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     expect(fallback).toBeTruthy();
     // RAG should not have been consulted in this short-circuit path.
     expect(retrieveMock).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------
+  // RAG cache (per-conversation, freeze on first non-empty result)
+  // -----------------------------------------------------------------
+
+  it('caches a non-empty RAG result on the first turn under the conversation id', async () => {
+    const chunks = [
+      {
+        id: 1,
+        source: 'On Food and Cooking',
+        document: 'On Food and Cooking',
+        page: 89,
+        content: 'Emulsions stabilise via lecithin from the egg yolk.',
+        score: 0.88,
+        category: 'Food Science and Cooking Principles',
+      },
+    ];
+    retrieveMock.mockResolvedValueOnce(chunks);
+
+    const { result } = renderHook(() => useAntoine());
+    await act(async () => {
+      await result.current.send('Why does hollandaise break?');
+    });
+
+    expect(retrieveMock).toHaveBeenCalledTimes(1);
+    const s = useConversationStore.getState();
+    const activeId = s.activeId!;
+    expect(activeId).toBeTruthy();
+    expect(s.ragChunksByConversation[activeId]).toEqual(chunks);
+  });
+
+  it('reuses cached chunks on the second turn without calling retrieve()', async () => {
+    const chunks = [
+      {
+        id: 1,
+        source: 'Salt Fat Acid Heat',
+        document: 'Salt Fat Acid Heat',
+        page: null,
+        content: 'Salt sharpens, fat carries, acid balances, heat transforms.',
+        score: 0.91,
+        category: 'Food Science and Cooking Principles',
+      },
+    ];
+    // First turn: retrieve returns the chunks (gets cached).
+    retrieveMock.mockResolvedValueOnce(chunks);
+
+    const llamaCompletion = jest.spyOn(
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('@/services/inferenceService'),
+      'completion',
+    );
+    const { result } = renderHook(() => useAntoine());
+
+    await act(async () => {
+      await result.current.send('What temperature for a 1.5-inch ribeye?');
+    });
+    await act(async () => {
+      await result.current.send('What about a strip steak instead?');
+    });
+
+    // retrieve() should have been invoked exactly ONCE across both
+    // sends — turn 2 reused the cached chunks.
+    expect(retrieveMock).toHaveBeenCalledTimes(1);
+
+    // Both completion calls should have a RAG-block system message at
+    // index 1 with the SAME content (byte-identical), proving the
+    // cached chunks were rendered into turn 2's prompt.
+    expect(llamaCompletion).toHaveBeenCalledTimes(2);
+    const turn1Args = (
+      llamaCompletion.mock.calls[0]?.[1] as { messages: { role: string; content: string }[] }
+    ).messages;
+    const turn2Args = (
+      llamaCompletion.mock.calls[1]?.[1] as { messages: { role: string; content: string }[] }
+    ).messages;
+    expect(turn1Args[1]?.role).toBe('system');
+    expect(turn2Args[1]?.role).toBe('system');
+    expect(turn2Args[1]?.content).toBe(turn1Args[1]?.content);
+
+    llamaCompletion.mockRestore();
+  });
+
+  it('does NOT cache an empty RAG result, so the second turn retries retrieval', async () => {
+    // First turn: retrieve returns []. Second turn: retrieve returns
+    // chunks. The contract: empty results are never cached, so the
+    // second turn must call retrieve() fresh.
+    retrieveMock.mockResolvedValueOnce([]);
+    retrieveMock.mockResolvedValueOnce([
+      {
+        id: 1,
+        source: 'The Flavor Bible',
+        document: 'The Flavor Bible',
+        page: null,
+        content: 'Coffee pairs with cardamom, dark chocolate, and orange zest.',
+        score: 0.84,
+        category: 'Ingredients and Flavour Pairing',
+      },
+    ]);
+
+    const { result } = renderHook(() => useAntoine());
+
+    await act(async () => {
+      await result.current.send('hello');
+    });
+    // After turn 1, the cache for this conversation must still be
+    // undefined (empty arrays are not cached).
+    const sAfter1 = useConversationStore.getState();
+    const activeId = sAfter1.activeId!;
+    expect(sAfter1.ragChunksByConversation[activeId]).toBeUndefined();
+
+    await act(async () => {
+      await result.current.send('What pairs with coffee?');
+    });
+
+    // retrieve() must have been called twice — once on turn 1
+    // (returned [], not cached) and once on turn 2 (returned chunks,
+    // now cached).
+    expect(retrieveMock).toHaveBeenCalledTimes(2);
+    const sAfter2 = useConversationStore.getState();
+    expect(sAfter2.ragChunksByConversation[activeId]).toBeDefined();
+    expect(sAfter2.ragChunksByConversation[activeId]?.length).toBe(1);
   });
 });

@@ -96,6 +96,14 @@ const STOP_TOKENS = ['<end_of_turn>', '<|end_of_turn|>', '<eos>', '</s>', '<|end
 
 const STOP_TOKEN_SET = new Set<string>(STOP_TOKENS);
 
+/**
+ * Module-level turn counter for timing diagnostics. Increments on every
+ * successful completion() call so log lines can be paired across turns
+ * (turn 1 is full prefill; turn 2+ should show cache_n > 0 if llama.cpp's
+ * internal prompt-cache reuses any prefix).
+ */
+let timingTurnCounter = 0;
+
 export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   if (__forceError.value) {
     throw new Error('Couldn’t load Antoine. Check the model files in Settings.');
@@ -103,26 +111,42 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   enableNativeLogOnce();
   const native = await nativeInitLlama({
     model: options.model,
-    n_ctx: options.contextSize ?? 1536,
+    // n_ctx=2048 is now safe with the Q4_0 main weights (NEON-native, no
+    // repack buffer) + Q4_0 KV cache (~18 MB combined at this size).
+    // The earlier 1536 ceiling was forced by Q4_K_M's CPU_REPACK buffer
+    // colliding with the Android low-memory killer. With both weights
+    // and KV at Q4_0 the device has headroom — verified empirically.
+    n_ctx: options.contextSize ?? 2048,
+    // 256 batch size. Tested 512 on 2026-04-30 — same prefill timing on
+    // the Dimensity 7300 but +308 MiB compute buffer for nothing. Prefill
+    // is matmul-bound on the A78 cores, not batch-overhead-bound, so
+    // bigger batches don't help.
     n_batch: options.batchSize ?? 256,
     n_ubatch: options.batchSize ?? 256,
     n_threads: options.threadCount ?? 4,
     n_gpu_layers: 0,
-    // Skip the SIMD-optimized weight repack (CPU_REPACK buffer in load
-    // logs). On the Moto G86 Power, the repack adds a ~2.8 GB heap
-    // allocation on top of the 5 GB mmap'd weights, which combined with
-    // the JS runtime and Android system pushes total RAM past the
-    // device's ~8 GB ceiling and triggers the kernel low-memory killer.
-    // Without repack, prompt processing is slower (no NEON-optimized
-    // kernel), but the app actually survives long enough to answer.
+    // No-op for Q4_0 weights (Q4_0 has no repack buffer to skip), but
+    // kept as a defensive flag in case llama.cpp adds extra buffer types
+    // in a future bump that would re-trigger the OOM. Originally added
+    // for Q4_K_M weights where the SIMD repack added ~2.8 GB heap on
+    // top of the 5 GB mmap'd weights and OOM-killed the app.
     no_extra_bufts: true,
-    // Quantize the KV cache from F16 → Q4_0. Saves ~40 MB on the current
-    // n_ctx=1536 (54 MB → ~14 MB combined K+V). Quality impact on a 4B
-    // model is negligible per llama.cpp benchmarks. The freed RAM is
-    // headroom for either bumping n_ctx to ~2048 once Q4_0 weights land,
-    // or absorbing transient OS pressure during prefill.
+    // KV cache stored as Q4_0. At n_ctx=2048 this is ~18 MB combined K+V.
+    // Tested Q8_0 on 2026-04-30 — app SIGKILL'd by Android's low-memory
+    // killer (~+18 MB pushed past the ceiling). flash-attention runs
+    // fine with Q4_0 KV in this build of llama.rn (verified empirically
+    // — log showed `Flash Attention was auto, set to enabled` with Q4_0).
+    // Off-grid's claim that Q4_0+flash-attn isn't supported was wrong
+    // for our specific binary.
     cache_type_k: 'q4_0',
     cache_type_v: 'q4_0',
+    // Flash-attention is on by default at flash_attn=auto in llama.rn
+    // 0.12.0-rc.5; explicit `flash_attn_type: 'auto'` was tested and
+    // contributed to the OOM combined with Q8_0 KV. Removed to stay at
+    // the implicit default which IS active (verified in logcat).
+    // Tried `kv_unified: true` (off-grid recommendation) — silently
+    // dropped before the native binding in 0.12.0-rc.5. Param was
+    // added in a later llama.rn release.
   });
   return { id: native.id, modelPath: options.model, native };
 }
@@ -153,6 +177,11 @@ export async function completion(
       // is the falsy value Jinja respects. (Confirmed empirically: the
       // string "false" did not suppress the <|channel>thought block.)
       chat_template_kwargs: { enable_thinking: '' },
+      // `reasoning_format` default is already 'none' in llama.rn 0.12.0-rc.5
+      // (verified by reading node_modules/llama.rn/src/index.ts). Explicitly
+      // set elsewhere in the off-grid repo for newer versions; no-op for us.
+      // `ctx_shift` is not exposed in this version's TS surface — added in
+      // a later release. Stuck with the default (re-prefill on overflow).
     },
     onToken
       ? (data: TokenData) => {
@@ -163,6 +192,23 @@ export async function completion(
         }
       : undefined,
   );
+  timingTurnCounter += 1;
+  const t = result.timings;
+  if (t) {
+    console.info(
+      `[inferenceService] turn=${timingTurnCounter} ` +
+        `cache_n=${t.cache_n} ` +
+        `prompt_n=${t.prompt_n} ` +
+        `prompt_ms=${Math.round(t.prompt_ms)} ` +
+        `prompt_per_second=${t.prompt_per_second?.toFixed?.(2) ?? t.prompt_per_second} ` +
+        `predicted_n=${t.predicted_n} ` +
+        `predicted_ms=${Math.round(t.predicted_ms)}`,
+    );
+  } else {
+    console.info(
+      `[inferenceService] turn=${timingTurnCounter} timings=null (native didn't return timings object)`,
+    );
+  }
   return { text: result.text ?? '', tokensUsed: result.timings?.predicted_n };
 }
 
