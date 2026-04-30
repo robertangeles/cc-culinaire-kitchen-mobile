@@ -4,6 +4,22 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-01 (AM) — Inference tuning branch landed on main (PR #11 squash-merge `5be7079`)
+
+Short session focused on closing out yesterday's inference-tuning work.
+
+1. **PR #11 opened, PR #10 closed, PR #11 squash-merged.** All 7 commits from `feature/ck-mob/inference-tuning` (Antoine V2 Q4_0 weights + n_ctx=2048, four-stage inference param sweep, RAG-cache-per-conversation fix, wiki + spec updates) collapsed into one commit on `main`: `5be7079 Tune Antoine V2 inference: Q4_0 weights, RAG cache for multi-turn prefix reuse (#11)`. PR #10 closed as superseded — its single commit (`e8a3633`) is included in #11.
+
+2. **In-flight notes corrected.** Yesterday's note claimed "PR #10 merged"; in reality it was open and `feature/ck-mob/inference-tuning` was stacked on top of it. Caught at session start by checking `git log main..feature/ck-mob/inference-tuning` (7 commits, not 4) and `gh pr list` (PR #10 still OPEN). Fix shipped in this session's merge.
+
+3. **Pre-flight green.** `pnpm lint` clean, `pnpm tsc --noEmit` clean, `pnpm test` 125 / 23 suites passing.
+
+4. **In-flight rotated.** "Open + merge PR" task removed (done). Next-action #1 is now `saveSession`/`loadSession` for system-prompt KV state — half-day work, spec at [docs/specs/kv-prefix-cache-via-parallel-state.md](../docs/specs/kv-prefix-cache-via-parallel-state.md). Backlog item added: PRs #7 (wiki CRLF parser fix) and #8 (CI workflow) still open, unrelated to inference.
+
+**Status:** `main` is at `5be7079`, working tree clean, branches deleted on origin. Conversational multi-turn shipped + verified. Cold-launch turn-1 prefill (~75–80s) is the next target.
+
+---
+
 ## 2026-04-30 (PM) — RAG + dynamic system prompt shipped (code-complete, tests green)
 
 After mainline-quantized GGUF cleared the model file blocker and Antoine was confirmed loading + generating tokens on device, today's session wired the two services that turn "generic small model running locally" into "private culinary librarian + chef":
