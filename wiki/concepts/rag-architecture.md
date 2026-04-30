@@ -86,11 +86,11 @@ When `page === null` (current production state — the chunker doesn't store pag
 [1] Salt Fat Acid Heat: ...
 ```
 
-The same chunks are then surfaced to the user as a "Sources" footer appended to the committed assistant message — the proof that Antoine isn't hallucinating, it's grounded.
+**RAG chunks are private to the model.** The chunk text, source titles, and page numbers go into the system message ONLY. They are never appended to the committed assistant message and never rendered in the chat UI. Antoine's inline `[n]` citations within his reply are the only user-visible reference to the corpus — the user sees the citation but not the underlying chunk. (An earlier iteration appended a visible `---\nSources:\n[1] ...` footer to the committed message; that was reverted on 2026-04-30 because it leaked corpus titles into a UI that should display only the assistant's words.)
 
 ## Timeout policy: 3 seconds, silent fallback
 
-`ragService.retrieve()` enforces a 3-second hard timeout via `Promise.race([fetchPromise, timeoutPromise])`. If the web is slow, offline, returns 4xx/5xx, or the response shape is malformed, the function returns `[]` and inference proceeds without retrieval. The user sees no error; they just don't get a Sources footer that turn.
+`ragService.retrieve()` enforces a 3-second hard timeout via `Promise.race([fetchPromise, timeoutPromise])`. If the web is slow, offline, returns 4xx/5xx, or the response shape is malformed, the function returns `[]` and inference proceeds without retrieval. The user sees no error; the model simply has no `[n]` references to cite that turn.
 
 This is deliberate: we'd rather answer without context than make the user wait an extra five seconds for a question Antoine can probably handle from training. The user's earlier feedback ("don't leave silent gaps") is satisfied by the streaming-bubble subtitle ("Antoine is consulting your library…") — they see the consultation happen, and if it returns nothing, the bubble simply transitions to "warming up…" → tokens.
 

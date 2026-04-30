@@ -193,7 +193,11 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     llamaCompletion.mockRestore();
   });
 
-  it('appends a Sources footer to the committed assistant message when RAG returned chunks', async () => {
+  it('commits the model reply verbatim without a Sources footer or chunk metadata', async () => {
+    // RAG chunks are the model's PRIVATE context — the chunk text + book
+    // titles must never leak into the user-visible message. Antoine's
+    // inline [n] citations within his reply are fine; the raw source
+    // block is not.
     retrieveMock.mockResolvedValueOnce([
       {
         id: 1,
@@ -222,10 +226,15 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
 
     const insertCalls = (messageQueries.insert as jest.Mock).mock.calls.map((c) => c[0]);
     const assistantInsert = insertCalls.find((c) => c.role === 'assistant');
-    expect(assistantInsert?.content).toContain('---\nSources:');
-    expect(assistantInsert?.content).toContain('[1] On Food and Cooking, p. 89');
-    expect(assistantInsert?.content).toContain('[2] The Flavor Bible');
-    expect(assistantInsert?.content).not.toContain('p. null');
+    // Mocked llama.rn returns `*giggles*` as the final text. The committed
+    // message must equal exactly that — no Sources block, no separator,
+    // no chunk titles, no chunk content.
+    expect(assistantInsert?.content).toBe('*giggles*');
+    expect(assistantInsert?.content).not.toContain('Sources:');
+    expect(assistantInsert?.content).not.toContain('---');
+    expect(assistantInsert?.content).not.toContain('On Food and Cooking');
+    expect(assistantInsert?.content).not.toContain('The Flavor Bible');
+    expect(assistantInsert?.content).not.toContain('lecithin');
   });
 
   it('proceeds with inference when ragService returns [] (endpoint offline / network error)', async () => {

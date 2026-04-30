@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { completion, initLlama, type LlamaContext } from '@/services/inferenceService';
 import { getMainModelPath } from '@/services/modelLocator';
 import { getActivePrompt } from '@/services/promptCacheService';
-import { formatRagContext, retrieve, type RagChunk } from '@/services/ragService';
+import { formatRagContext, retrieve } from '@/services/ragService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 import { useModelStore } from '@/store/modelStore';
@@ -36,22 +36,6 @@ function makeMessage(
   const id = `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const base: Message = { id, conversationId, role, content, createdAt: Date.now() };
   return imageUri ? { ...base, imageUri } : base;
-}
-
-/**
- * Append a Sources footer to the assistant's committed reply when RAG
- * chunks were used. Footer is plain text appended after a separator —
- * ChatBubble can later parse and render it as a styled block. For v1
- * the inline text is enough; the citations persist with the message in
- * SQLite without a schema change.
- */
-function appendSourcesFooter(replyText: string, chunks: RagChunk[]): string {
-  if (chunks.length === 0) return replyText;
-  const lines = chunks.map((c, i) => {
-    const where = c.page !== null ? `${c.source}, p. ${c.page}` : c.source;
-    return `[${i + 1}] ${where}`;
-  });
-  return `${replyText}\n\n---\nSources:\n${lines.join('\n')}`;
 }
 
 export function useAntoine() {
@@ -161,12 +145,13 @@ export function useAntoine() {
         );
         console.info(`[useAntoine] completion done — text=${result.text.length}b`);
 
-        // Append the sources footer to the final committed text so the
-        // citations persist with the message in SQLite. The model's reply
-        // already contains [n] references inline; the footer maps them
-        // to titles + pages.
-        const finalText = appendSourcesFooter(result.text, ragChunks);
-        await commitStreaming(conversationId, finalText);
+        // Commit the model's reply verbatim. The RAG chunks were the
+        // model's PRIVATE context (passed via the system message above)
+        // — they are not part of the user-visible message and must not
+        // be appended to the committed text. Antoine's inline [n]
+        // citations remain in the rendered message; the chunk text +
+        // titles never appear in the chat UI.
+        await commitStreaming(conversationId, result.text);
       } catch (e) {
         console.error('[useAntoine] send() failed:', e);
         clearStreaming();
