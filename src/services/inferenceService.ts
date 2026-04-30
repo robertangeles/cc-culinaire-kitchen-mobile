@@ -116,6 +116,13 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // Without repack, prompt processing is slower (no NEON-optimized
     // kernel), but the app actually survives long enough to answer.
     no_extra_bufts: true,
+    // Quantize the KV cache from F16 → Q4_0. Saves ~40 MB on the current
+    // n_ctx=1536 (54 MB → ~14 MB combined K+V). Quality impact on a 4B
+    // model is negligible per llama.cpp benchmarks. The freed RAM is
+    // headroom for either bumping n_ctx to ~2048 once Q4_0 weights land,
+    // or absorbing transient OS pressure during prefill.
+    cache_type_k: 'q4_0',
+    cache_type_v: 'q4_0',
   });
   return { id: native.id, modelPath: options.model, native };
 }
