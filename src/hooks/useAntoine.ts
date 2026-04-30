@@ -1,7 +1,11 @@
 import { useCallback, useState } from 'react';
 
-import { completion, initLlama, type LlamaContext } from '@/services/inferenceService';
-import { getMainModelPath } from '@/services/modelLocator';
+import { completion, ensureContext } from '@/services/inferenceService';
+import {
+  markKvHandled,
+  saveSystemPromptKV,
+  wasKvHandledThisSession,
+} from '@/services/kvSessionService';
 import { getActivePrompt } from '@/services/promptCacheService';
 import { formatRagContext, retrieve, type RagChunk } from '@/services/ragService';
 import { useAuthStore } from '@/store/authStore';
@@ -14,18 +18,6 @@ import type { InferenceMessage } from '@/types/inference';
 // for the full explanation. Returning a fresh `[]` from a Zustand selector
 // causes infinite re-renders when there's no active conversation.
 const EMPTY_MESSAGES: Message[] = [];
-
-// Module-level context cache. Multi-second cold load on first message; cached
-// for the JS lifetime after that. TODO: invalidate on settings reconfigure
-// (release the context, set to null) once the path-override UI ships.
-let cachedContext: LlamaContext | null = null;
-
-async function ensureContext(): Promise<LlamaContext> {
-  if (cachedContext) return cachedContext;
-  const modelPath = await getMainModelPath();
-  cachedContext = await initLlama({ model: modelPath });
-  return cachedContext;
-}
 
 function makeMessage(
   conversationId: string,
@@ -181,6 +173,22 @@ export function useAntoine() {
         // citations remain in the rendered message; the chunk text +
         // titles never appear in the chat UI.
         await commitStreaming(conversationId, result.text);
+
+        // After the first successful completion of this JS lifetime,
+        // save the system-prompt slice of the KV cache so the NEXT
+        // app launch can skip system-prompt prefill via loadSession.
+        // Cuts turn 1 cold-launch prefill ~78s -> ~37s.
+        //
+        // Set the flag synchronously BEFORE the async save so that a
+        // concurrent send() doesn't fire a second save. If the save
+        // throws (disk full, write error), we still skip retries this
+        // session — the next launch will retry naturally.
+        if (!wasKvHandledThisSession()) {
+          markKvHandled();
+          void saveSystemPromptKV(ctx, systemPrompt).catch((err) => {
+            console.warn('[useAntoine] saveSystemPromptKV failed:', err);
+          });
+        }
       } catch (e) {
         console.error('[useAntoine] send() failed:', e);
         clearStreaming();

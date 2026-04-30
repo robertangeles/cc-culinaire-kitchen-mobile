@@ -28,20 +28,31 @@ function getNativeModule(): BackgroundDownloadNativeModule | null {
   return (mod as BackgroundDownloadNativeModule | undefined) ?? null;
 }
 
-async function getBaseDir(): Promise<string> {
-  const override = await SecureStore.getItemAsync(STORAGE_KEYS.modelDir);
-  if (override && override.length > 0) return override;
+/**
+ * Returns the bare app document directory (no subdir). Used by services
+ * that store non-model files under app-private storage — e.g.,
+ * `kvSessionService` keeps saved KV state under `<docDir>/kv-state/`.
+ *
+ * The model-files subdirectory is layered on top via `getBaseDir()`.
+ */
+export async function getDocumentDirectoryBase(): Promise<string> {
   const native = getNativeModule();
   if (!native) {
     throw new Error(
       'BackgroundDownloadModule is not registered. Run `pnpm android` to rebuild the dev client.',
     );
   }
-  const filesDir = await native.getDocumentDirectory();
+  return native.getDocumentDirectory();
+}
+
+async function getBaseDir(): Promise<string> {
+  const override = await SecureStore.getItemAsync(STORAGE_KEYS.modelDir);
+  if (override && override.length > 0) return override;
+  const filesDir = await getDocumentDirectoryBase();
   return joinPath(filesDir, SUBDIRECTORY);
 }
 
-function joinPath(...parts: string[]): string {
+export function joinPath(...parts: string[]): string {
   return parts
     .map((p, i) => (i === 0 ? p.replace(/\/+$/, '') : p.replace(/^\/+|\/+$/g, '')))
     .filter((p) => p.length > 0)
@@ -71,7 +82,7 @@ export interface VerifyResult {
  * for the existence check. Without this, getInfoAsync silently returns
  * `{exists: false}` even when the file is on disk.
  */
-function toFileUri(path: string): string {
+export function toFileUri(path: string): string {
   if (path.startsWith('file://')) return path;
   return `file://${path}`;
 }

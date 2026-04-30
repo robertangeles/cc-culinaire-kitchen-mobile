@@ -2,7 +2,7 @@
 title: Privacy invariant — conversation content never leaves the device
 category: concept
 created: 2026-04-29
-updated: 2026-04-30
+updated: 2026-05-01
 related: [[antoine]], [[web-backend]], [[screens]], [[rag-architecture]], [[server-managed-prompts]]
 ---
 
@@ -23,6 +23,7 @@ What stays on device — never crosses the boundary:
 - Token-stream intermediates
 - Anything derived from any of the above (summaries, embeddings, recipe extracts)
 - The active system prompt as it sits in the model context (the _cached_ body from the server is on device, but it is never re-uploaded)
+- **Saved KV cache state** — `<docDir>/kv-state/system-prompt-*.bin` (binary KV blob) and `system-prompt-*.json` (sidecar metadata: prompt hash, token count, runtime fingerprint, llama.rn version). Derived from the on-device system prompt body only; never syncs, never uploads. Local invalidation only when prompt hash, runtime params, or llama.rn version changes. See [[llama-rn-inference-params]].
 
 What is allowed to leave the device:
 

@@ -2,8 +2,8 @@
 title: llama.rn inference parameters for Antoine
 category: decision
 created: 2026-04-29
-updated: 2026-04-30
-related: [[antoine]], [[on-device-inference]], [[streaming-architecture]], [[model-quantization-must-be-mainline]]
+updated: 2026-05-01
+related: [[antoine]], [[on-device-inference]], [[streaming-architecture]], [[model-quantization-must-be-mainline]], [[privacy-invariant]]
 ---
 
 The exact `initLlama` and `completion` parameters baked into `src/services/inferenceService.ts`, with the reasoning for each. Tuned empirically on the Moto G86 Power (Mediatek Dimensity 7300, 8 GB RAM, arm64-v8a) — values reflect what actually survives + streams, not what the model docs suggest.
@@ -59,7 +59,34 @@ The exact `initLlama` and `completion` parameters baked into `src/services/infer
 - **`use_mmap`** — left at llama.rn's default (true). Critical for keeping the 5 GB weights paged rather than fully resident.
 - **Repeat penalty / frequency penalty** — not set. Gemma 3n instruction-tuned doesn't loop noticeably; revisit if observed.
 - **Sampler chain** — default ordering. No mirostat, no dynamic temp.
-- **`n_keep` / KV-prefix reuse across turns** — every `send()` re-prefills the entire prompt today. Identifying the system-prompt prefix and skipping its re-prefill on turn 2+ would be ~3× speedup on multi-turn — deferred until basic chat is fast enough on Q4_0.
+
+## KV session persistence (across launches)
+
+After PR #11 (RAG cache per conversation) shipped, turn 2+ within a session is ~2s prefill. The remaining target is **turn 1 of every cold launch**, which still pays ~78s to prefill the ~410-token system prompt every time the JS lifetime resets.
+
+`kvSessionService` (`src/services/kvSessionService.ts`) saves the system-prompt slice of the KV cache after the first successful completion of each JS lifetime, then restores it via `loadSession` on the next boot. Cuts turn 1 cold-launch prefill ~78s → ~37s on every launch after the first ever.
+
+**File layout:** `<docDir>/kv-state/system-prompt-{hashPrefix12}.bin` + `.json` sidecar.
+
+**When save fires:** in `useAntoine.send()` after the first successful `commitStreaming` of the JS lifetime, gated on `wasKvHandledThisSession()`. Fire-and-forget; failures (disk full, write error) are swallowed with a warning.
+
+**When load fires:** in the boot effect in `app/_layout.tsx` after `isPrefsHydrated && isActive`. Stacks with model pre-warm — `ensureContext()` and `loadSystemPromptKV()` run in sequence in the background while the user is on the chat tab, so the first send pays neither the cold model load nor the system-prompt prefill.
+
+**Five invalidation triggers** (any one deletes the saved files and forces fresh prefill):
+
+1. Prompt hash mismatch — server prompt was edited via web admin, mobile pulled the new body via `refreshAndCache`, hash differs from the sidecar's `promptHashFull`.
+2. llama.rn version mismatch — sidecar's `llamaRnVersion` differs from `LLAMA_RN_VERSION`. Binary KV format may have changed across releases.
+3. Runtime fingerprint mismatch — any of `n_ctx` / `n_batch` / `cache_type_k` / `cache_type_v` differs from `INFERENCE_RUNTIME` (the canonical const exported by inferenceService).
+4. Native `loadSession` throws (corrupt file, partial write from prior crash).
+5. `tokens_loaded !== sidecar.tokenSize` — partial restore detected; the sidecar lied or the binary was truncated.
+
+**Risk profile:** wrong invalidation = model attends to KV from a different prompt = silent garbage output. The five independent triggers + comprehensive unit tests are the mitigation. Privacy: state lives in app-private storage, never syncs, never uploads — see [[privacy-invariant]].
+
+**Out of scope** of the current implementation:
+
+- Per-conversation KV state (only system prompt is saved)
+- Memory-pressure check before pre-warming (LMK handles it)
+- Path-override settings UI integration — `releaseCachedContext()` is wired up, but the UI itself isn't in this milestone
 
 ## When to revisit
 

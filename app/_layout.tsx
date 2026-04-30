@@ -26,7 +26,12 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
 import { configureGoogleSignIn } from '@/services/googleSignIn';
-import { refreshAndCache as refreshAntoinePrompt } from '@/services/promptCacheService';
+import { ensureContext } from '@/services/inferenceService';
+import { loadSystemPromptKV, markKvHandled } from '@/services/kvSessionService';
+import {
+  getActivePrompt,
+  refreshAndCache as refreshAntoinePrompt,
+} from '@/services/promptCacheService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
 import { useModelStore } from '@/store/modelStore';
@@ -76,6 +81,8 @@ export default function RootLayout() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const isHydrated = useAuthStore((s) => s.isHydrated);
   const hydrateModelPrefs = useModelStore((s) => s.hydratePrefs);
+  const isModelActive = useModelStore((s) => s.isActive);
+  const isPrefsHydrated = useModelStore((s) => s.isPrefsHydrated);
   const setDbReady = useConversationStore((s) => s.setDbReady);
   const { success: migrationsRan, error: migrationError } = useMigrations(db, migrations);
 
@@ -107,6 +114,35 @@ export default function RootLayout() {
   useEffect(() => {
     if (migrationsRan) setDbReady(true);
   }, [migrationsRan, setDbReady]);
+
+  // KV-state warmup. Once model files are confirmed present (isActive
+  // flips true after hydratePrefs verifies them on disk), pre-warm the
+  // llama context AND restore the saved system-prompt KV state. This
+  // happens in the background while the user is on the chat tab UI;
+  // the first send() then skips both the cold model load (~10-30s) AND
+  // the system-prompt prefill (~45s), dropping turn 1 to ~37s on every
+  // launch after the first ever.
+  //
+  // All best-effort. Any failure is caught + warned and falls back to
+  // today's behaviour (full cold prefill). Never blocks app launch.
+  useEffect(() => {
+    if (!isPrefsHydrated || !isModelActive) return;
+    void (async () => {
+      try {
+        const ctx = await ensureContext();
+        const prompt = await getActivePrompt();
+        const warmed = await loadSystemPromptKV(ctx, prompt);
+        if (warmed) {
+          markKvHandled();
+          console.info('[boot] KV warmed — turn 1 skips system-prompt prefill');
+        } else {
+          console.info('[boot] KV cold — turn 1 will fully prefill, save after');
+        }
+      } catch (e) {
+        console.warn('[boot] kvSession warmup failed:', e);
+      }
+    })();
+  }, [isPrefsHydrated, isModelActive]);
 
   useEffect(() => {
     if (fontsLoaded && isHydrated && (migrationsRan || migrationError)) {
