@@ -123,23 +123,19 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // for Q4_K_M weights where the SIMD repack added ~2.8 GB heap on
     // top of the 5 GB mmap'd weights and OOM-killed the app.
     no_extra_bufts: true,
-    // KV cache stored as Q8_0 instead of F16. At n_ctx=2048 this saves
-    // ~36 MB (72 MB F16 → ~36 MB Q8_0) — less reduction than Q4_0 (~18
-    // MB) but Q8_0 is the standard "small KV" pick: cheaper attention
-    // dequant than Q4_0 and required by flash-attention on llama.cpp
-    // builds where Q4_0 KV isn't an officially-supported flash-attn
-    // pairing. Pairs with `flash_attn_type: 'auto'` below.
-    cache_type_k: 'q8_0',
-    cache_type_v: 'q8_0',
-    // Flash-attention fused kernel — the biggest CPU prefill win llama.cpp
-    // shipped in 2025. Replaces three separate ops (Q·K, softmax, ·V) with
-    // one fused kernel that's ~2× the throughput on A78 cores. 'auto' lets
-    // llama.cpp pick on/off based on hardware + KV format. Off-grid-mobile-ai
-    // (alichherawalla, 2025) ships this on Android by default.
-    // n_threads + n_batch experiments showed prefill is matmul-bound on
-    // this device — flash-attn is the only knob that reduces work per
-    // token rather than overhead per batch.
-    flash_attn_type: 'auto',
+    // KV cache stored as Q4_0. At n_ctx=2048 this is ~18 MB combined K+V.
+    // Tested Q8_0 on 2026-04-30 — app SIGKILL'd by Android's low-memory
+    // killer (~+18 MB pushed past the ceiling). flash-attention runs
+    // fine with Q4_0 KV in this build of llama.rn (verified empirically
+    // — log showed `Flash Attention was auto, set to enabled` with Q4_0).
+    // Off-grid's claim that Q4_0+flash-attn isn't supported was wrong
+    // for our specific binary.
+    cache_type_k: 'q4_0',
+    cache_type_v: 'q4_0',
+    // Flash-attention is on by default at flash_attn=auto in llama.rn
+    // 0.12.0-rc.5; explicit `flash_attn_type: 'auto'` was tested and
+    // contributed to the OOM combined with Q8_0 KV. Removed to stay at
+    // the implicit default which IS active (verified in logcat).
   });
   return { id: native.id, modelPath: options.model, native };
 }
