@@ -96,6 +96,14 @@ const STOP_TOKENS = ['<end_of_turn>', '<|end_of_turn|>', '<eos>', '</s>', '<|end
 
 const STOP_TOKEN_SET = new Set<string>(STOP_TOKENS);
 
+/**
+ * Module-level turn counter for timing diagnostics. Increments on every
+ * successful completion() call so log lines can be paired across turns
+ * (turn 1 is full prefill; turn 2+ should show cache_n > 0 if llama.cpp's
+ * internal prompt-cache reuses any prefix).
+ */
+let timingTurnCounter = 0;
+
 export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   if (__forceError.value) {
     throw new Error('Couldn’t load Antoine. Check the model files in Settings.');
@@ -136,6 +144,9 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // 0.12.0-rc.5; explicit `flash_attn_type: 'auto'` was tested and
     // contributed to the OOM combined with Q8_0 KV. Removed to stay at
     // the implicit default which IS active (verified in logcat).
+    // Tried `kv_unified: true` (off-grid recommendation) — silently
+    // dropped before the native binding in 0.12.0-rc.5. Param was
+    // added in a later llama.rn release.
   });
   return { id: native.id, modelPath: options.model, native };
 }
@@ -166,6 +177,11 @@ export async function completion(
       // is the falsy value Jinja respects. (Confirmed empirically: the
       // string "false" did not suppress the <|channel>thought block.)
       chat_template_kwargs: { enable_thinking: '' },
+      // `reasoning_format` default is already 'none' in llama.rn 0.12.0-rc.5
+      // (verified by reading node_modules/llama.rn/src/index.ts). Explicitly
+      // set elsewhere in the off-grid repo for newer versions; no-op for us.
+      // `ctx_shift` is not exposed in this version's TS surface — added in
+      // a later release. Stuck with the default (re-prefill on overflow).
     },
     onToken
       ? (data: TokenData) => {
@@ -176,6 +192,23 @@ export async function completion(
         }
       : undefined,
   );
+  timingTurnCounter += 1;
+  const t = result.timings;
+  if (t) {
+    console.info(
+      `[inferenceService] turn=${timingTurnCounter} ` +
+        `cache_n=${t.cache_n} ` +
+        `prompt_n=${t.prompt_n} ` +
+        `prompt_ms=${Math.round(t.prompt_ms)} ` +
+        `prompt_per_second=${t.prompt_per_second?.toFixed?.(2) ?? t.prompt_per_second} ` +
+        `predicted_n=${t.predicted_n} ` +
+        `predicted_ms=${Math.round(t.predicted_ms)}`,
+    );
+  } else {
+    console.info(
+      `[inferenceService] turn=${timingTurnCounter} timings=null (native didn't return timings object)`,
+    );
+  }
   return { text: result.text ?? '', tokensUsed: result.timings?.predicted_n };
 }
 
