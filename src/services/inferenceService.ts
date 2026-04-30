@@ -131,6 +131,15 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // pairing. Pairs with `flash_attn_type: 'auto'` below.
     cache_type_k: 'q8_0',
     cache_type_v: 'q8_0',
+    // Flash-attention fused kernel — the biggest CPU prefill win llama.cpp
+    // shipped in 2025. Replaces three separate ops (Q·K, softmax, ·V) with
+    // one fused kernel that's ~2× the throughput on A78 cores. 'auto' lets
+    // llama.cpp pick on/off based on hardware + KV format. Off-grid-mobile-ai
+    // (alichherawalla, 2025) ships this on Android by default.
+    // n_threads + n_batch experiments showed prefill is matmul-bound on
+    // this device — flash-attn is the only knob that reduces work per
+    // token rather than overhead per batch.
+    flash_attn_type: 'auto',
   });
   return { id: native.id, modelPath: options.model, native };
 }
