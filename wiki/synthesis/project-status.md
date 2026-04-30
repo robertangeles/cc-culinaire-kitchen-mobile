@@ -29,15 +29,22 @@ A human-readable snapshot of where CulinAIre Mobile is as of 2026-04-29. Derived
 
 ## Next major milestone
 
-**Real on-device inference via `llama.rn`.** The model is on disk; the chat works against a stub (`src/services/inferenceService.ts`) that returns canned responses keyed off keywords. Replacing that stub is the biggest remaining piece of the on-device journey.
+**Real on-device inference via `llama.rn` — code-complete, awaiting device verification.** The stub at `src/services/inferenceService.ts` was replaced with real `llama.rn` calls. Token streaming is wired end-to-end through a transient Zustand slice (no per-token SQLite writes). System prompt injection, conversation history, error fallback, and privacy invariant all preserved. tsc + lint + 94 tests green.
 
-Why it's not trivial:
+What's left before this milestone is shipped:
 
-- 5.34 GB model loaded into RAM (or mmapped) on a phone with ~8 GB RAM — tight.
-- First-load time is multi-second; need a "warming Antoine" UX.
-- Streaming token UX needs care to feel responsive without dropping bubbles.
-- Multimodal (image input via mmproj) — defer to a follow-up unless it's cheap to wire.
-- llama.rn may need the Expo Config Plugin treatment if it doesn't autolink cleanly with the New Architecture.
+- Device verification on the Moto G86 Power: cold-load time, steady-state RAM, multi-turn coherence.
+- Open the PR.
+
+Deferred follow-ups:
+
+- Multimodal (image input via mmproj) — file lands on disk via the download service, but no UI surface yet.
+- "Warming Antoine" UX for the multi-second cold load on first message.
+- Token throttling — only if device measurement shows render thrash during streaming.
+- Stop-generation button (cancel streaming mid-flight).
+- Settings screen path-override UI (the SecureStore key is honored if set out-of-band).
+
+See [[llama-rn-inference-params]] and [[streaming-architecture]] for the technical decisions.
 
 ## Other follow-ups (P1/P2/P3 from `tasks/todo.md`)
 
@@ -47,7 +54,7 @@ Why it's not trivial:
 - Wire real Google Play Billing via `react-native-iap` (subscription gating)
 - ~~Implement real model download against the CDN~~ ✅ shipped (PR #4)
 - ~~First-launch flow redesign + entertainment screen during model download~~ ✅ shipped (PR #3)
-- Integrate `llama.rn` and ship real `inferenceService` ← **next major milestone**
+- Integrate `llama.rn` and ship real `inferenceService` ← code-complete, awaiting device verification
 
 ### P2 — Backend sync, second screen, full E2E coverage
 

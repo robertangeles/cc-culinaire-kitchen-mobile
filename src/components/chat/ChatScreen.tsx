@@ -1,9 +1,9 @@
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Image, Keyboard, Modal, Pressable, StyleSheet, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, palette, spacing, theme } from '@/constants/theme';
@@ -40,22 +40,45 @@ export function ChatScreen() {
   const { send } = useAntoine();
 
   // Keyboard avoidance lives at the screen level, not in ChatComposer. With
-  // edgeToEdgeEnabled: true (app.config.ts), Android's adjustResize is a no-op
-  // and KeyboardAvoidingView is unreliable. Translating only the composer
-  // (our previous attempt) made it overlap siblings above. Solution: lift
-  // the IME height to the root view as paddingBottom so flex re-layouts the
-  // entire chat area.
+  // edgeToEdgeEnabled: true (app.config.ts), Android's adjustResize is a
+  // no-op and KeyboardAvoidingView is unreliable. We lift the IME height
+  // to the root view as paddingBottom so flex re-layouts the entire chat
+  // area when the keyboard appears.
   //
-  // CRITICAL: subtract the tab bar height. ChatScreen's bottom edge sits
-  // tabBar.height above the screen bottom (the (tabs) layout reserves that
-  // space). The keyboard rises from the screen bottom, so it only OVERLAPS
-  // ChatScreen by `max(0, keyboard.height - tabBar.height)`. Without the
-  // subtraction we double-count and a tabBar.height-sized gap appears
-  // between the composer and the keyboard top.
-  const keyboard = useAnimatedKeyboard();
+  // Why explicit `Keyboard.addListener` instead of `useAnimatedKeyboard()`:
+  // on Android 14+ with edgeToEdgeEnabled, useAnimatedKeyboard sometimes
+  // leaves `height.value` stuck at the prior keyboard height after a
+  // swipe-down or tap-outside dismissal — the keyboardDidHide event
+  // doesn't always propagate cleanly through the animated wrapper. The
+  // result is the composer staying lifted with empty space underneath
+  // even though no keyboard is visible. Listening directly to the
+  // imperative Keyboard events and animating a sharedValue ourselves is
+  // boring and reliable.
+  //
+  // CRITICAL: subtract the tab bar's CONTENT height, not its full height.
+  // useBottomTabBarHeight() includes insets.bottom (the gesture-nav-bar
+  // safe area). Android edge-to-edge's keyboardDidShow reports
+  // e.endCoordinates.height as the keyboard panel only — it does NOT
+  // include the nav-bar area sitting above it. Subtracting the full
+  // tabBarHeight double-counts insets.bottom and under-lifts by ~insets.bottom,
+  // leaving the composer hidden behind the keyboard's suggestion toolbar.
   const tabBarHeight = useBottomTabBarHeight();
+  const tabBarContentHeight = Math.max(0, tabBarHeight - insets.bottom);
+  const keyboardHeight = useSharedValue(0);
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardHeight.value = withTiming(e.endCoordinates.height, { duration: 250 });
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardHeight.value = withTiming(0, { duration: 250 });
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardHeight]);
   const rootStyle = useAnimatedStyle(() => ({
-    paddingBottom: Math.max(0, keyboard.height.value - tabBarHeight),
+    paddingBottom: Math.max(0, keyboardHeight.value - tabBarContentHeight),
   }));
 
   const [kebabOpen, setKebabOpen] = useState(false);

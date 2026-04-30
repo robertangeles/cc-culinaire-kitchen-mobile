@@ -2,34 +2,45 @@
 title: Privacy invariant — conversation content never leaves the device
 category: concept
 created: 2026-04-29
-updated: 2026-04-29
-related: [[antoine]], [[web-backend]], [[screens]]
+updated: 2026-04-30
+related: [[antoine]], [[web-backend]], [[screens]], [[rag-architecture]], [[server-managed-prompts]]
 ---
 
 The single non-negotiable rule that defines this product. Every architectural decision must be checkable against it, and every code path must be auditable for compliance.
 
-## The rule
+## The rule (refined 2026-04-30 with the RAG boundary)
 
-**Conversation content stays on the device. Always.**
+**Model responses, multi-turn history, and image attachments stay on the device. Always.**
 
-"Conversation content" includes:
+The single, narrow exception introduced by RAG retrieval is the **current user query text** — sent to the web backend solely to fetch the relevant chunks from the indexed culinary corpus. The query is not logged with PII, not used for training, and not correlated with the user's identity beyond the auth token required for rate limiting.
 
-- The user's typed messages
-- Antoine's generated responses
-- Any image the user attaches to a message
+What stays on device — never crosses the boundary:
+
+- Antoine's generated responses (token streams, final assistant messages)
+- Multi-turn conversation history (every prior turn, both roles)
+- Image attachments (when multimodal input ships)
 - Voice transcripts (when push-to-talk ships)
-- System prompts injected into the model context
 - Token-stream intermediates
 - Anything derived from any of the above (summaries, embeddings, recipe extracts)
+- The active system prompt as it sits in the model context (the _cached_ body from the server is on device, but it is never re-uploaded)
 
-What CAN flow to the backend:
+What is allowed to leave the device:
 
+- The most recent user query, sent ONLY to `POST /api/mobile/rag/retrieve` for chunk retrieval. History is not appended; prior turns are not sent.
 - User identity (`AuthUser` shape — email, name, photo URL, subscription state)
 - Conversation **metadata** — id, created_at, updated_at, message_count, device_id, sync_status
 - Subscription telemetry (purchase token verification, plan tier)
 - Crash reports that don't touch any of the above (currently nothing — no SDK installed)
 
-If a column or payload could contain user-generated text from a conversation → it belongs in SQLite only.
+If a column or payload could contain Antoine's response, prior-turn user text, or image data → it belongs in SQLite only.
+
+## Why the query crosses the boundary but the response doesn't
+
+The web's indexed corpus (4,400+ chunks across 18 culinary books) is too large to ship inside the APK and would be stale within a release cycle. Retrieval has to happen server-side. To retrieve, the server needs a query string. We send only the most recent message — never the conversation history — so the server's view of the user is "they asked one thing today" rather than "here is their cooking diary."
+
+Server-side privacy doctrine (verified 2026-04-30 against the deployed controller at commit 8a72295): query text is **never persisted**. Server logs `userId`, latency, `chunkCount`, search mode (`vector` | `keyword`), `limit`, and `category` — not the query itself.
+
+The response and any subsequent reasoning happen on device. The server never sees what Antoine said back.
 
 ## How the rule is enforced
 
@@ -83,13 +94,16 @@ A single SDK that exfiltrates one prompt — even unintentionally, even for "imp
 
 When in doubt:
 
-1. `grep -r "fetch\|axios\|http" src/services/inferenceService.ts` — must return zero matches.
+1. `grep -r "fetch\|axios\|http" src/services/inferenceService.ts` — must return zero matches. (`ragService.ts` and `promptCacheService.ts` are explicitly outside this audit list — they are the boundary services.)
 2. `grep -r "content" src/services/syncService.ts` (when it exists) — must only appear in column-list constants for metadata, never in payload construction.
-3. Check `package.json` deps quarterly for any new analytics/crash-reporting SDK that snuck in.
+3. `src/services/ragService.ts` — confirm only `query.trim()` (single string, current turn) is sent in the POST body. Conversation history must not be in scope. The `category` filter is a server-controlled string, never user-derived prose.
+4. Check `package.json` deps quarterly for any new analytics/crash-reporting SDK that snuck in.
 
 ## See also
 
 - [[antoine]] — the persona whose credibility depends on this rule
 - [[web-backend]] — the only network surface the app talks to
 - [[background-download]] — the SSRF guard pattern
+- [[rag-architecture]] — the data flow that introduced the query-leaves boundary
+- [[server-managed-prompts]] — why the prompt body is fetched, not bundled
 - `CLAUDE.md` § "Privacy Rules — Non-Negotiable" — the formal rule statement

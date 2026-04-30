@@ -4,6 +4,111 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-04-30 (PM) — RAG + dynamic system prompt shipped (code-complete, tests green)
+
+After mainline-quantized GGUF cleared the model file blocker and Antoine was confirmed loading + generating tokens on device, today's session wired the two services that turn "generic small model running locally" into "private culinary librarian + chef":
+
+1. **`src/services/promptCacheService.ts`** — fetches `GET /api/mobile/prompts/antoine-system-prompt` on boot, caches `{ body, version, cachedAt }` in SecureStore, version-compares before writing. Falls back to baked-in `ANTOINE_SYSTEM_PROMPT` when cache + network both miss. Decision recorded at [server-managed-prompts](decisions/server-managed-prompts.md).
+
+2. **`src/services/ragService.ts`** — wraps `POST /api/mobile/rag/retrieve` (web commit `8a72295`). 3-second hard timeout via `Promise.race`. Returns `[]` on every failure mode (network error, ApiError, NetworkError, malformed response, timeout). Citation-aware `formatRagContext()` produces the system message Antoine sees, numbered `[1]`, `[2]`, ... so it can cite. Architecture documented at [rag-architecture](concepts/rag-architecture.md).
+
+3. **`useAntoine.send()` rewritten.** Three-stage streaming bubble: `retrieving` → `warming` → `streaming`. Parallel `getActivePrompt()` + `retrieve()` before `ensureContext()`. Sources footer (`---\nSources:\n[1] ...`) appended on commit when chunks were retrieved.
+
+4. **Privacy invariant refined.** [privacy-invariant.md](concepts/privacy-invariant.md) rewritten 2026-04-30 to specify the new boundary: model responses, multi-turn history, image attachments stay; only the current query crosses for RAG retrieval. The web's privacy doctrine (query never persisted, server logs `userId/latency/chunkCount/searchMode/limit/category` only) is documented end-to-end.
+
+5. **Streaming-bubble UX.** `ChatList` renders the virtual bubble whenever `streamingStage !== null`, surfacing "Antoine is consulting your library…" / "Antoine is warming up…" subtitles per the user's earlier feedback about silent gaps.
+
+6. **Keyboard dismiss fix.** `ChatScreen` now uses explicit `Keyboard.addListener` + `withTiming` instead of `useAnimatedKeyboard` (Android 14+ edge-to-edge bug where `height` stuck after dismissal).
+
+7. **Tests.** 13 unit (`promptCacheService`), 11 unit (`ragService`), 7 integration (`useAntoine.streaming` rewrite covering RAG-block injection, Sources footer, RAG-empty graceful degradation, inference error fallback, model-not-active short-circuit). 122 tests total, all green; tsc + lint clean.
+
+8. **Cross-project shared dir.** Path corrected to `../cc-culinaire-shared-context/`. `model-config.md` (mobile-owned) now reflects the gemma4 + 0.12.0-rc.5 + `no_extra_bufts: true` runtime config.
+
+9. **Wiki updates.** New: [rag-architecture](concepts/rag-architecture.md), [server-managed-prompts](decisions/server-managed-prompts.md). Updated: [privacy-invariant](concepts/privacy-invariant.md), [antoine](entities/antoine.md) (Knowledge sources), [in-flight](synthesis/in-flight.md), [index](index.md).
+
+**Status:** Code-complete, 122 tests green. Awaiting commit + on-device verification of the full RAG path (consultation subtitle → tokens → Sources footer with real `[1]` citations from the corpus).
+
+---
+
+## 2026-04-30 — Device verification: integration works, model file doesn't
+
+Spent the session getting the llama.rn integration onto the Moto G86 Power. Hit four real bugs in the Android stack and one hard wall in the model file.
+
+**Bugs fixed (uncommitted; all on `feature/ck-mob/llama-rn-integration`):**
+
+1. **`useModelDownload.ts`** — removed unmount-cancel cleanup. The effect was firing on every screen unmount including the success path (download → setReady → routes to chat → DownloadingScreen unmounts), racing the worker's SHA-256 verification and getting completed downloads marked `user_cancelled` with their files deleted. The download module was designed to survive screen unmounts; the cleanup was a bug.
+
+2. **`modelStore.ts hydratePrefs()`** — added a boot-time `verifyModelFiles()` check that flips `isActive=true` when the .gguf files are on disk. Previously `isActive` was in-memory only and reset to `false` on every app restart, so the chat screen always showed the "download Antoine" CTA even when the 6 GB model was right there.
+
+3. **`modelLocator.ts verifyModelFiles()`** — wraps paths with `file://` URI scheme. `expo-file-system.getInfoAsync()` requires a URI-style path, not a bare filesystem path. Without this, the boot-time check silently returned `{exists: false}` even when the files were present, defeating fix #2.
+
+4. **`inferenceService.ts`** — added `toggleNativeLog(true)` + `addNativeLogListener` so llama.cpp's stderr surfaces in logcat as `[llama.rn:error]` lines. This was the unlock that exposed the actual model load failure chain. Without this, all errors collapsed to the generic `RNLlama: unable to load model`.
+
+Also created `scripts/patch-gguf-arch.py` — Python helper using `gguf-py` to rewrite GGUF metadata in place. Renames a non-standard `general.architecture` value and `gemma4.*` keys to standard `gemma3n.*`. Useful diagnostic; cannot add missing tensors.
+
+**The wall:** The Antoine GGUF on the R2 bucket was quantized by Unsloth with `general.architecture = "gemma4"` (non-standard) and is **structurally missing tensors** that mainline llama.cpp's `gemma3n` loader requires (`altup_proj.weight` and the rest of the altup sublayer). Renaming metadata got us past the architecture and tokenizer checks, but the missing tensors are not recoverable through a metadata patch — the data isn't there. Verified via `gguf-py`: zero altup tensors in the file.
+
+**Resolution requires action outside Claude:** Re-quantize the fine-tuned safetensors using mainline `llama.cpp`'s `convert_hf_to_gguf.py` + `llama-quantize`. Procedure documented at [model-quantization-must-be-mainline](decisions/model-quantization-must-be-mainline.md). The resulting file will have `general.architecture = "gemma3n"` and the full tensor inventory llama.cpp expects. No app code changes needed — just URL + SHA-256 in `src/constants/config.ts`.
+
+**Diagnostic infrastructure that paid off:**
+
+- `toggleNativeLog(true)` — without it we saw "unable to load model" four times across hours and never knew why. With it, the third attempt surfaced the architecture name, the fourth surfaced the tokenizer string, the fifth surfaced the missing-tensor name. Each error had a clear next step.
+- `gguf-py`-based metadata + tensor inspection on the host — let us prove the missing-tensor hypothesis without further on-device round-trips.
+- `adb logcat` filter on `RNLlama|llama|ggml` tags — narrow signal, no noise.
+
+**Wiki changes:**
+
+- Updated: `synthesis/in-flight.md` — status is now "blocked on model file" not "code-complete awaiting device verification". Lists the four uncommitted hotfixes + the next-session prerequisites.
+- New: `decisions/model-quantization-must-be-mainline.md` — full diagnostic chain + re-quantization procedure + future-proofing recommendations (architecture sanity-check in CI).
+- Updated: `index.md` — new decision page registered.
+
+**What this session does NOT include:**
+
+- Inference actually working. Antoine cannot answer questions yet. Code path is verified end-to-end up to tensor allocation; below that is the model file.
+- A merged PR. The four hotfixes need to land on top of the integration commit before merge.
+
+---
+
+## 2026-04-29 — llama.rn integration (code path) — Antoine speaks for real
+
+**What shipped (locally; awaiting device verification before PR).**
+
+Replaced the 96-line stub at `src/services/inferenceService.ts` with a real `llama.rn` integration. Public API preserved: `initLlama`, `completion`, `releaseAllLlama`, `buildMessageArray`, `__forceError` — but `completion` now accepts an optional `onToken` callback that streams tokens as the model produces them. Stop tokens (`<end_of_turn>`, `<|end_of_turn|>`, `<eos>`, `</s>`, `<|endoftext|>`) are filtered out of the streaming callback so they never leak into rendered text.
+
+New file: `src/services/modelLocator.ts` — resolves the absolute GGUF path from `BackgroundDownloadModule.getDocumentDirectory()` with a SecureStore override key (`STORAGE_KEYS.modelDir`) for a future settings reconfig UI. Includes `verifyModelFiles()` that uses `expo-file-system/legacy` to confirm both files (main + mmproj) are on disk.
+
+Streaming slice added to `useConversationStore`: `streamingConversationId` + `streamingText` state, `startStreaming` / `appendStreamingToken` / `commitStreaming` / `clearStreaming` actions. Transient Zustand state — never written to SQLite per token. The completed reply commits as a single `INSERT` once the model finishes.
+
+`useAntoine.send()` now calls `getMainModelPath()` instead of the hard-coded `'antoine.gguf'`, and wraps the inference call with `startStreaming → completion(ctx, params, onToken) → commitStreaming`. Error path goes through `clearStreaming + addMessage(fallback)`.
+
+`ChatList` subscribes to `streamingText` and `streamingConversationId`, renders a virtual in-progress bubble (id `__streaming__`) at the bottom of the list when streaming targets the active conversation. The committed assistant bubble swaps in seamlessly when streaming ends.
+
+New config plugin: `plugins/withLlamaRn` adds the `-keep class com.rnllama.** { *; }` ProGuard rule to `android/app/proguard-rules.pro` idempotently across prebuilds. Required for release builds (R8 minification would strip llama.rn's native classes otherwise).
+
+Tests rewritten + added:
+
+- `src/__tests__/unit/inferenceService.test.ts` — rewritten against `llama.rn/jest/mock`. 8 assertions: init returns wrapped context, init force-error throws, completion returns mocked text + tokensUsed, streaming callback fires per token, completion forwards messages with system prompt at index 0, completion force-error throws, releaseAllLlama resolves, buildMessageArray prepends Antoine's system prompt.
+- `src/__tests__/unit/modelLocator.test.ts` — 6 assertions: native fallback, SecureStore override, mmproj path, verifyModelFiles ok, verifyModelFiles missing, error when neither override nor native module is available.
+- `src/__tests__/unit/conversationStore.streaming.test.ts` — 5 assertions on the streaming slice.
+- `src/__tests__/integration/useAntoine.streaming.test.tsx` — 3 assertions on the end-to-end flow including error and pre-model-active fallback paths.
+
+Test infrastructure updates in `jest.setup.ts`: mock `expo-sqlite` (so `db/client.ts` can be imported without crashing on `openDatabaseSync`); `require('llama.rn/jest/mock')`; `beforeAll` installs the JSI globals and overrides `llamaGetFormattedChat` so the JS-side "Prompt is required" guard passes when only `messages` is sent.
+
+Privacy audit: `grep -rEn "fetch|axios|http|XMLHttpRequest|WebSocket" src/services/inferenceService.ts` returns zero matches (re-worded the docstring so even the comment doesn't trip the audit).
+
+**Wiki updates.**
+
+- New: `wiki/decisions/llama-rn-inference-params.md` — n_ctx=2048, n_predict=1024, temperature=0.7, top_p=0.9, n_threads=4, stop tokens, with reasoning for each. Notes follow-ups: bump n_ctx after measuring RSS on device; try GPU offload if tokens/sec is low; add repeat_penalty if responses loop.
+- New: `wiki/concepts/streaming-architecture.md` — the transient Zustand slice + virtual ChatList bubble pattern, why no per-token SQLite writes, why no token throttling yet, race-condition handling for navigate-mid-stream and parallel sends.
+- Updated: `wiki/entities/antoine.md` — lifecycle step 4 now describes the real inference flow, with crosslinks to the two new pages.
+- Updated: `wiki/synthesis/in-flight.md` — moved llama.rn (code path) to "Last completed", set "Currently in flight" to device verification, listed concrete next-session steps.
+- Updated: `wiki/synthesis/project-status.md` — milestone status now reads "code-complete, awaiting device verification" with the deferred-followups list.
+- Updated: `wiki/index.md` — added the two new pages.
+
+**What's NOT done.** Device verification on the Moto G86 Power. `pnpm android` will trigger the `expo prebuild` + native rebuild. First build is long (llama.rn ships ~150 MB of native libs across arm64-v8a + x86_64). After that, send a real culinary question and watch Antoine type the reply.
+
+---
+
 ## 2026-04-29 — Added `wiki/synthesis/in-flight.md` for cross-session continuity
 
 **Problem.** Each new Claude session starts fresh. The TodoWrite list (the most precise picture of "where we are") evaporates at session end. Without a deliberate breadcrumb, the next Claude has to infer the next action from `project-status.md` + `tasks/todo.md` + recent git log — and might guess wrong.

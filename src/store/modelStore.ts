@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { STORAGE_KEYS } from '@/constants/config';
+import { verifyModelFiles } from '@/services/modelLocator';
 
 export type ModelState = 'idle' | 'downloading' | 'ready' | 'error';
 
@@ -54,9 +55,27 @@ export const useModelStore = create<ModelStoreState>((set) => ({
       // SecureStore can fail on devices where the secure element is
       // unavailable (rare, but real on rooted devices and some emulators).
       // Fall back to the safe default rather than crashing app startup.
-    } finally {
-      set({ isPrefsHydrated: true });
     }
+
+    // Check if the model files are already on disk from a previous run.
+    // `isActive` is in-memory only and would otherwise default to false on
+    // every app launch, forcing the user back through the download flow
+    // even when their 6 GB model is right there. Reads BackgroundDownloadModule
+    // for the path, expo-file-system for existence — pure fs reads, no
+    // network calls.
+    try {
+      const result = await verifyModelFiles();
+      console.info(
+        `[modelStore] verifyModelFiles ok=${result.ok} missing=${JSON.stringify(result.missing)}`,
+      );
+      if (result.ok) {
+        set({ state: 'ready', progress: 1, isActive: true, error: null });
+      }
+    } catch (e) {
+      console.warn('[modelStore] verifyModelFiles threw:', e);
+    }
+
+    set({ isPrefsHydrated: true });
   },
 
   setWifiOnly: async (value) => {

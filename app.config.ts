@@ -60,6 +60,10 @@ const config: ExpoConfig = {
     // registration on every prebuild. Required because android/ is
     // gitignored — see plugins/withBackgroundDownload/README.md.
     './plugins/withBackgroundDownload',
+    // Adds the ProGuard keep rule for llama.rn's native classes
+    // (`com.rnllama.**`) so they survive R8 minification on release
+    // builds. Idempotent across prebuilds.
+    './plugins/withLlamaRn',
   ],
   experiments: {
     typedRoutes: true,

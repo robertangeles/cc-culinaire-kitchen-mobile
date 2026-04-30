@@ -1021,3 +1021,25 @@ Required files:
 For development: transfer via USB cable to device storage.
 For production: downloaded from CDN via modelDownloadService.
 Never commit GGUF files to the repository.
+
+---
+
+# Shared Context
+
+Location: ../cc-culinaire-shared-context/
+
+Read at the start of every session involving cross-project work.
+
+## File ownership for this project
+
+- You OWN: mobile-needs.md, model-config.md
+- Update immediately when needs change or model config changes
+- READ ONLY: api-contracts.md, db-schema.md, web-needs.md
+- Check web-needs.md at session start for any web requests
+
+## Cross-project workflow
+
+1. If you need something from the web project — write to mobile-needs.md
+2. If you see a pending need in web-needs.md — fulfill it and mark complete
+3. Significant cross-project decisions go in decisions.md with today's date
+4. Never guess at API contracts — always read api-contracts.md first

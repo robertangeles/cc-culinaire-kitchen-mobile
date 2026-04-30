@@ -51,19 +51,19 @@ export const MODEL = {
   displayName: 'Antoine',
   files: {
     main: {
-      filename: 'gemma-4-e4b-it.Q4_K_M.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/gemma-4-e4b-it.Q4_K_M.gguf',
-      sizeBytes: 5_335_285_376,
-      sha256: '4ec9a2f362063cc7a0c85ca649d940dc900b7cc6512cc5158e74985f7a2a0a9a',
+      filename: 'antoine_mobile_gemma3n.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine_mobile_gemma3n.gguf',
+      sizeBytes: 5_335_289_664,
+      sha256: 'eb45850d7893f9355dc8caa90b0ae516a8e71d91c80c4126e1df68d63b2602dc',
     },
     mmproj: {
-      filename: 'gemma-4-e4b-it.BF16-mmproj.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/gemma-4-e4b-it.BF16-mmproj.gguf',
-      sizeBytes: 991_551_904,
-      sha256: 'c4a315853ae5fb62aa642f8c9cb4f61a49dac4a5ed0428250e2ebcfa02ffde30',
+      filename: 'antoine_mmproj.gguf',
+      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine_mmproj.gguf',
+      sizeBytes: 991_551_840,
+      sha256: '737485f56225fc61a1468711c4bb07c2b0b9f7f94db0c4cc5feb9aaae429938b',
     },
   },
-  totalBytes: 5_335_285_376 + 991_551_904,
+  totalBytes: 5_335_289_664 + 991_551_840,
 } as const;
 
 export const STORAGE_KEYS = {
@@ -72,4 +72,13 @@ export const STORAGE_KEYS = {
   authUser: 'ckm_auth_user',
   modelDir: 'ckm_model_dir',
   downloadWifiOnly: 'ckm_download_wifi_only',
+  /** Cached Antoine system prompt (body + version + cachedAt as JSON). */
+  antoinePrompt: 'ckm_antoine_prompt',
 } as const;
+
+/**
+ * Slug for the on-device Antoine system prompt as authored in the web
+ * admin UI. Server filters by runtime — `device` prompts are returned
+ * here; `server` prompts return 404 by design.
+ */
+export const ANTOINE_PROMPT_SLUG = 'antoine-system-prompt';
