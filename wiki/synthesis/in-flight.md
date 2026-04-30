@@ -12,33 +12,44 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**PR #9 merged to main.** RAG retrieval, dynamic system prompt, streaming UX, keyboard fix, and four hotfixes from the device session are all on main. Antoine answers grounded in the corpus on the Moto G86 Power, with `[n]` citations + Sources footer. The 10-star moment is shipped — it's just slow.
+**Antoine V2 (Q4_0) shipped to config — pending device verification.** Branch `feature/ck-mob/antoine-v2-q4_0` has the model swap + n_ctx bump. After device test confirms ~5× prefill speedup, this is the milestone where Antoine becomes conversational rather than glacial.
 
-**Speed is the only blocker.** Q4_K_M weights run at ~1 tok/s prefill on this device because we had to disable the NEON-friendly weight repack to avoid OOM. **Q4_0 re-quantization is in flight in a separate Colab session** (user is running it). When it lands, expected ~5× prefill speedup with no code change beyond `MODEL.files.main` config update.
+**On main today:**
 
-**Just shipped (post-merge):** KV cache quantization to Q4_0 (`cache_type_k`/`cache_type_v: 'q4_0'`). Frees ~40 MB on the device — RAM headroom that lets us bump `n_ctx` to ~2048 once Q4_0 _weights_ arrive, or absorb prefill memory pressure today.
+- PR #9 (RAG retrieval, dynamic system prompt, streaming UX, four device hotfixes)
+- `c31efef` — KV cache Q4_0 (saves ~50 MB at n_ctx=2048)
+- `e44b087` — Sources footer removed from chat UI
+
+**On feature branch (uncommitted, awaiting device verify):**
+
+- `MODEL.files.main` → `antoine-v2-q4_0.gguf` (5,185,929,024 bytes; SHA `86b4b9d8...`)
+- `MODEL.files.mmproj` → `antoine-v2-mmproj-bf16.gguf` (same bytes as v1 mmproj, just renamed on R2; SHA `737485f5...`)
+- `n_ctx: 1536 → 2048` in `inferenceService.ts` (now safe with Q4_0 weights + Q4_0 KV cache)
 
 ## Last completed
 
-- **PR #9 merged to main.** llama.rn 0.12.0-rc.5, RAG service, prompt cache service, useAntoine rewrite, three-stage streaming bubble, Sources footer, keyboard layout fix, hydration race fix, four device hotfixes. 122 tests green.
-- **KV cache quantized to Q4_0.** One-line change in `inferenceService.ts`. Saves ~40 MB. tsc + lint + 122 tests still green. See [[llama-rn-inference-params]] for the updated parameter table.
-- **Wiki: `decisions/llama-rn-inference-params.md` rewritten** to reflect the empirically-tuned values (n_ctx=1536, n_predict=384, no_extra_bufts:true, KV Q4_0) — the page was stale with the original pre-device-verification numbers.
+- **PR #9 merged to main.** llama.rn 0.12.0-rc.5, RAG service, prompt cache service, useAntoine rewrite, three-stage streaming bubble, keyboard layout fix, hydration race fix, four device hotfixes.
+- **KV cache quantized to Q4_0** (`c31efef`). Frees ~50 MB at n_ctx=2048. tsc + lint + 122 tests green.
+- **Sources footer removed from chat UI** (`e44b087`). RAG chunks remain as the model's PRIVATE system context — only Antoine's reply (with any inline `[n]` citations he writes) is rendered in the chat. Earlier appendSourcesFooter that leaked corpus titles into the UI is gone.
+- **Q4_0 re-quantization completed in Colab.** Two new files on R2: `antoine-v2-q4_0.gguf` (Q4_0 main) + `antoine-v2-mmproj-bf16.gguf` (BF16 vision encoder, unchanged from v1).
 
 ## Currently in flight
 
-- **Colab re-quantization to Q4_0 weights** (user-driven, separate session). Output: `antoine_mobile_q4_0.gguf` on R2 + SHA-256 + size in bytes.
+- **Branch `feature/ck-mob/antoine-v2-q4_0`** ready for commit + device verification. After verify, merge to main.
 
 ## Next action
 
-When Colab finishes and the user pastes the SHA/size/URL:
-
-1. Update `MODEL.files.main` in `src/constants/config.ts` (URL, SHA-256, size in bytes, filename).
-2. Update `../cc-culinaire-shared-context/model-config.md` to the new quantization.
-3. Wipe the old Q4_K_M file off the device: `adb shell run-as com.anonymous.ccculinairekitchenmob rm files/models/antoine/v1/antoine_mobile_gemma3n.gguf`. Force-stop. Reopen.
-4. App routes to DownloadingScreen → fetches Q4_0 file → SHA verifies → loads.
-5. Send "Why does my hollandaise break?" — measure tokens/sec. Expected: ~5 tok/s prefill, ~5× faster overall.
-6. With Q4_0 baseline established, **bump `n_ctx` from 1536 → 2048** (room created by KV Q4_0). Optionally raise RAG `limit: 2 → 3-4` chunks for richer grounding.
-7. Re-attempt Vulkan offload (`n_gpu_layers: 99`) on Q4_0 specifically. The Mali-G615 may handle Q4_0's simpler layout where it choked on Q4_K_M.
+1. **Run tsc + lint + tests** on the feature branch to confirm green.
+2. **Commit** the model swap + n_ctx bump + wiki/shared-context updates on the feature branch.
+3. **Pause and ask before push** (per `feedback_ask_before_push.md`).
+4. **After push:** wipe old Q4_K_M off device:
+   ```
+   adb shell run-as com.anonymous.ccculinairekitchenmob rm files/models/antoine/v1/antoine_mobile_gemma3n.gguf
+   ```
+   Force-stop app, reopen → boot disk-check sees no file → DownloadingScreen → fetches Q4_0 (~4.83 GB) → SHA verifies → loads.
+5. **Verify on device:** send "Why does my hollandaise break?" — measure tokens/sec. Expected: ~5 tok/s prefill (5× over Q4_K_M).
+6. **Open PR + merge once verified.**
+7. **Optional follow-ups** once Q4_0 baseline is solid: raise RAG `limit: 2 → 3` for richer grounding (third chunk is ~100 tokens, fits comfortably). Retry Vulkan offload (`n_gpu_layers: 99`) on Q4_0 — different layout might unblock the Mali driver.
 
 ## Open questions / blockers
 

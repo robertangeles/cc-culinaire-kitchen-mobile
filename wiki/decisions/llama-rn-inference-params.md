@@ -12,7 +12,7 @@ The exact `initLlama` and `completion` parameters baked into `src/services/infer
 
 | Param                                  | Value                                                                    | Where set    |
 | -------------------------------------- | ------------------------------------------------------------------------ | ------------ |
-| `n_ctx`                                | 1536                                                                     | `initLlama`  |
+| `n_ctx`                                | 2048                                                                     | `initLlama`  |
 | `n_batch`                              | 256                                                                      | `initLlama`  |
 | `n_ubatch`                             | 256                                                                      | `initLlama`  |
 | `n_threads`                            | 4                                                                        | `initLlama`  |
@@ -30,13 +30,13 @@ The exact `initLlama` and `completion` parameters baked into `src/services/infer
 
 ### Memory-driven choices (the device fights us back)
 
-**`n_ctx = 1536`.** KV cache scales linearly with context. The wiki originally said 2048, which **OOM-killed the app during prefill** on the Moto G86. 1536 is the empirical survival ceiling once weights (~5 GB mmap) + JS runtime + Android system are all resident. Every value above was tested by getting kernel-level OOM-killed mid-chat.
+**`n_ctx = 2048`.** Bumped from 1536 on 2026-04-30 alongside the Q4_0 weight migration. The 1536 ceiling was forced by Q4_K_M's CPU_REPACK buffer colliding with Android's low-memory killer; Q4_0 weights have no repack buffer (NEON-friendly storage layout) and Q4_0 KV cache cuts that overhead ~4× — together they free enough headroom for 2048 tokens of context. The 2048 number is conservative; once we measure RSS on the Q4_0 build we can revisit pushing higher.
 
-**`no_extra_bufts = true`.** Disables llama.cpp's SIMD-optimized weight repack. Without this flag, the loader allocates a ~2.8 GB CPU_REPACK buffer on top of the 5 GB mmap'd weights, which triggers the kernel low-memory killer. The cost: prefill falls to a generic non-NEON path (~1 tok/s on Q4_K_M). Q4_0 weights bypass the repack entirely (NEON-friendly storage layout) — see [[model-quantization-must-be-mainline]] for the planned Q4_0 migration.
+**`no_extra_bufts = true`.** Originally added to disable llama.cpp's SIMD-optimized weight repack — that repack allocates a ~2.8 GB CPU_REPACK buffer on top of mmap'd weights and was the original OOM trigger on Q4_K_M. With Q4_0 weights this flag is a no-op (Q4_0 has no repack to skip), but kept defensively in case llama.cpp adds extra buffer types in a future bump that would re-trigger the OOM.
 
 **`n_batch = 256`, `n_ubatch = 256`.** llama.cpp's default of 2048 sizes the compute buffer for a 2048-token prefill at once (~2.5 GB). 256 sizes it to ~265 MiB, which fits. Smaller `n_batch` trades a bit of prefill throughput for survival.
 
-**`cache_type_k = 'q4_0'`, `cache_type_v = 'q4_0'`.** F16 KV cache uses ~54 MB at `n_ctx=1536` (24 MB + 30 MB SWA). Q4_0 cuts this ~4× to ~14 MB total. Quality impact on a 4B model is negligible per llama.cpp benchmarks. The freed RAM is headroom for either bumping `n_ctx` to ~2048 once Q4_0 _weights_ land, or absorbing transient OS pressure during prefill.
+**`cache_type_k = 'q4_0'`, `cache_type_v = 'q4_0'`.** F16 KV cache would use ~72 MB at `n_ctx=2048`. Q4_0 cuts this ~4× to ~18 MB. Quality impact on a 4B model is negligible per llama.cpp benchmarks. The KV cache savings are what enabled the n_ctx bump from 1536 → 2048 in the same memory budget.
 
 ### Throughput choices
 
@@ -46,7 +46,7 @@ The exact `initLlama` and `completion` parameters baked into `src/services/infer
 
 ### Generation choices
 
-**`n_predict = 384`.** Was 1024 originally. The system prompt + RAG block + history + n_predict must all fit within `n_ctx=1536`. With a ~700-token prompt budget, leaving 384 for the reply is the comfortable upper bound — produces 150-250 word answers. Ran 1024 once: "Context is full" error. 384 stuck.
+**`n_predict = 384`.** Was 1024 originally; lowered to 384 when n_ctx was 1536 to leave room for system prompt + RAG block. With n_ctx=2048 we now have ~1600 tokens of input budget; 384 still produces a comfortable 150-250 word answer. Could raise to 512 or 768 if longer culinary explanations are wanted — but the system prompt is calm-head-chef terse anyway, so 384 is rarely the bottleneck.
 
 **`temperature = 0.7`, `top_p = 0.9`.** Standard chat-tuned defaults. Lower (≤0.5) makes Antoine stilted; higher (≥1.0) breaks the voice rules (sentence case, no marketing language).
 
@@ -63,8 +63,9 @@ The exact `initLlama` and `completion` parameters baked into `src/services/infer
 
 ## When to revisit
 
-- **After Q4_0 weights land:** bump `n_ctx` to 2048, raise `retrieve(..., { limit: 2 })` to 3-4 chunks if context allows. Re-measure tokens/sec and RSS.
+- **Now that Q4_0 weights + n_ctx=2048 are live:** raise `retrieve(..., { limit: 2 })` to 3 chunks if grounding feels thin. The third chunk costs ~100 tokens at the 400-char clip; budget is there.
 - **If still slow on Q4_0:** sweep `n_threads` 4 → 6 → 8 and pick the one that maxes tokens/sec without UI jank.
+- **Vulkan offload retry on Q4_0:** the Mali-G615 driver crashed on Q4_K_M's repack-friendly layout. Q4_0's simpler layout might unblock the GPU path. Cheap to retest with `n_gpu_layers: 99`; revert if crash.
 - **If responses feel slow on multi-turn:** wire `n_keep` for system-prompt KV reuse.
 - **If responses feel repetitive:** add `repeat_penalty: 1.05` to completion params.
 

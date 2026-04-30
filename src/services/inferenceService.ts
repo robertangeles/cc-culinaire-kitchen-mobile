@@ -103,24 +103,25 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   enableNativeLogOnce();
   const native = await nativeInitLlama({
     model: options.model,
-    n_ctx: options.contextSize ?? 1536,
+    // n_ctx=2048 is now safe with the Q4_0 main weights (NEON-native, no
+    // repack buffer) + Q4_0 KV cache (~18 MB combined at this size).
+    // The earlier 1536 ceiling was forced by Q4_K_M's CPU_REPACK buffer
+    // colliding with the Android low-memory killer. With both weights
+    // and KV at Q4_0 the device has headroom — verified empirically.
+    n_ctx: options.contextSize ?? 2048,
     n_batch: options.batchSize ?? 256,
     n_ubatch: options.batchSize ?? 256,
     n_threads: options.threadCount ?? 4,
     n_gpu_layers: 0,
-    // Skip the SIMD-optimized weight repack (CPU_REPACK buffer in load
-    // logs). On the Moto G86 Power, the repack adds a ~2.8 GB heap
-    // allocation on top of the 5 GB mmap'd weights, which combined with
-    // the JS runtime and Android system pushes total RAM past the
-    // device's ~8 GB ceiling and triggers the kernel low-memory killer.
-    // Without repack, prompt processing is slower (no NEON-optimized
-    // kernel), but the app actually survives long enough to answer.
+    // No-op for Q4_0 weights (Q4_0 has no repack buffer to skip), but
+    // kept as a defensive flag in case llama.cpp adds extra buffer types
+    // in a future bump that would re-trigger the OOM. Originally added
+    // for Q4_K_M weights where the SIMD repack added ~2.8 GB heap on
+    // top of the 5 GB mmap'd weights and OOM-killed the app.
     no_extra_bufts: true,
-    // Quantize the KV cache from F16 → Q4_0. Saves ~40 MB on the current
-    // n_ctx=1536 (54 MB → ~14 MB combined K+V). Quality impact on a 4B
-    // model is negligible per llama.cpp benchmarks. The freed RAM is
-    // headroom for either bumping n_ctx to ~2048 once Q4_0 weights land,
-    // or absorbing transient OS pressure during prefill.
+    // KV cache stored as Q4_0 instead of F16. At n_ctx=2048 this saves
+    // ~50 MB (72 MB F16 → ~18 MB Q4_0). Quality impact on a 4B model is
+    // negligible per llama.cpp benchmarks.
     cache_type_k: 'q4_0',
     cache_type_v: 'q4_0',
   });
