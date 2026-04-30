@@ -109,16 +109,12 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // colliding with the Android low-memory killer. With both weights
     // and KV at Q4_0 the device has headroom — verified empirically.
     n_ctx: options.contextSize ?? 2048,
-    // Bumped 256 → 512 on 2026-04-30 (Stage 1 of inference-tuning sweep).
-    // 256 was the survival ceiling on Q4_K_M weights where the compute
-    // buffer + repack heap collided with Android's low-memory killer.
-    // With Q4_0 weights (no repack) and Q4_0 KV cache the device has
-    // headroom; doubling the prefill batch should ~2× the per-pass token
-    // throughput. Compute buffer was 261 MiB at 256, scales roughly
-    // linearly so ~520 MiB at 512 — still well under the ceiling.
-    // off-grid-mobile-ai (alichherawalla, 2025) uses 512 as default.
-    n_batch: options.batchSize ?? 512,
-    n_ubatch: options.batchSize ?? 512,
+    // 256 batch size. Tested 512 on 2026-04-30 — same prefill timing on
+    // the Dimensity 7300 but +308 MiB compute buffer for nothing. Prefill
+    // is matmul-bound on the A78 cores, not batch-overhead-bound, so
+    // bigger batches don't help.
+    n_batch: options.batchSize ?? 256,
+    n_ubatch: options.batchSize ?? 256,
     n_threads: options.threadCount ?? 4,
     n_gpu_layers: 0,
     // No-op for Q4_0 weights (Q4_0 has no repack buffer to skip), but
@@ -127,11 +123,14 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // for Q4_K_M weights where the SIMD repack added ~2.8 GB heap on
     // top of the 5 GB mmap'd weights and OOM-killed the app.
     no_extra_bufts: true,
-    // KV cache stored as Q4_0 instead of F16. At n_ctx=2048 this saves
-    // ~50 MB (72 MB F16 → ~18 MB Q4_0). Quality impact on a 4B model is
-    // negligible per llama.cpp benchmarks.
-    cache_type_k: 'q4_0',
-    cache_type_v: 'q4_0',
+    // KV cache stored as Q8_0 instead of F16. At n_ctx=2048 this saves
+    // ~36 MB (72 MB F16 → ~36 MB Q8_0) — less reduction than Q4_0 (~18
+    // MB) but Q8_0 is the standard "small KV" pick: cheaper attention
+    // dequant than Q4_0 and required by flash-attention on llama.cpp
+    // builds where Q4_0 KV isn't an officially-supported flash-attn
+    // pairing. Pairs with `flash_attn_type: 'auto'` below.
+    cache_type_k: 'q8_0',
+    cache_type_v: 'q8_0',
   });
   return { id: native.id, modelPath: options.model, native };
 }
