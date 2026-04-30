@@ -12,59 +12,43 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**Antoine V2 (Q4_0) shipped to config — pending device verification.** Branch `feature/ck-mob/antoine-v2-q4_0` has the model swap + n_ctx bump. After device test confirms ~5× prefill speedup, this is the milestone where Antoine becomes conversational rather than glacial.
+**Conversational multi-turn unlocked tonight.** RAG chunks now cache per-conversation; turn 2+ prefill drops from ~50s to ~2s on the Moto G86 Power. Turn 1 still pays the full ~75s cold prefill. Whole stack shipped + verified on device.
 
-**On main today:**
+Latest commit on `feature/ck-mob/inference-tuning`: **`2fcc8b3` (pushed)** — RAG cache per conversation. Branch has 4 commits total (Stage 1 n_batch experiment, Stage 2+3 q8_0+flash-attn experiment that OOM'd, revert, then the RAG cache fix). Awaiting PR + merge to main.
 
-- PR #9 (RAG retrieval, dynamic system prompt, streaming UX, four device hotfixes)
-- `c31efef` — KV cache Q4_0 (saves ~50 MB at n_ctx=2048)
-- `e44b087` — Sources footer removed from chat UI
+## Last completed (this session)
 
-**On feature branch (uncommitted, awaiting device verify):**
-
-- `MODEL.files.main` → `antoine-v2-q4_0.gguf` (5,185,929,024 bytes; SHA `86b4b9d8...`)
-- `MODEL.files.mmproj` → `antoine-v2-mmproj-bf16.gguf` (same bytes as v1 mmproj, just renamed on R2; SHA `737485f5...`)
-- `n_ctx: 1536 → 2048` in `inferenceService.ts` (now safe with Q4_0 weights + Q4_0 KV cache)
-
-## Last completed
-
-- **PR #9 merged to main.** llama.rn 0.12.0-rc.5, RAG service, prompt cache service, useAntoine rewrite, three-stage streaming bubble, keyboard layout fix, hydration race fix, four device hotfixes.
-- **KV cache quantized to Q4_0** (`c31efef`). Frees ~50 MB at n_ctx=2048. tsc + lint + 122 tests green.
-- **Sources footer removed from chat UI** (`e44b087`). RAG chunks remain as the model's PRIVATE system context — only Antoine's reply (with any inline `[n]` citations he writes) is rendered in the chat. Earlier appendSourcesFooter that leaked corpus titles into the UI is gone.
-- **Q4_0 re-quantization completed in Colab.** Two new files on R2: `antoine-v2-q4_0.gguf` (Q4_0 main) + `antoine-v2-mmproj-bf16.gguf` (BF16 vision encoder, unchanged from v1).
+- **PR #10 merged:** Antoine V2 Q4_0 weights live, n_ctx=2048, KV cache Q4_0. Verified ~9 tok/s prefill (9× over Q4_K_M baseline).
+- **RAG cache per conversation (`2fcc8b3`):** first user message retrieves; chunks frozen for the rest of the conversation. Empty results NOT cached so a chitchat opener doesn't lock out citations on the real follow-up. Stabilises the message-array prefix across turns so llama.cpp's automatic KV-prefix cache reuses everything past the system prompt. Verified on device: turn 2 `prompt_n` 433 → **17**, `prompt_ms` 50s → **1.9s**.
+- **Investigations that paid off:** `getFormattedChat` byte-diff between turns showed cache match terminated at end of system prompt because RAG block at index [1] differed across turns. Web-side investigation confirmed there's no similarity threshold filter — empty results are upstream blips (likely OpenAI embedding service rate limits).
+- **Dead ends recorded:** off-grid `kv_unified` / `ctx_shift` not in our llama.rn 0.12.0-rc.5. n_batch 256→512 no-op. q8_0 KV + explicit flash_attn OOM'd. n_threads 6 no improvement. Vulkan backend not in the prebuilt JNI.
 
 ## Currently in flight
 
-- **Branch `feature/ck-mob/antoine-v2-q4_0`** ready for commit + device verification. After verify, merge to main.
+Nothing blocked. Code-complete on RAG cache. PR description for `feature/ck-mob/inference-tuning` not yet written.
 
-## Next action
+## Next action — RECOMMENDED ORDER FOR NEXT SESSION
 
-1. **Run tsc + lint + tests** on the feature branch to confirm green.
-2. **Commit** the model swap + n_ctx bump + wiki/shared-context updates on the feature branch.
-3. **Pause and ask before push** (per `feedback_ask_before_push.md`).
-4. **After push:** wipe old Q4_K_M off device:
-   ```
-   adb shell run-as com.anonymous.ccculinairekitchenmob rm files/models/antoine/v1/antoine_mobile_gemma3n.gguf
-   ```
-   Force-stop app, reopen → boot disk-check sees no file → DownloadingScreen → fetches Q4_0 (~4.83 GB) → SHA verifies → loads.
-5. **Verify on device:** send "Why does my hollandaise break?" — measure tokens/sec. Expected: ~5 tok/s prefill (5× over Q4_K_M).
-6. **Open PR + merge once verified.**
-7. **Optional follow-ups** once Q4_0 baseline is solid: raise RAG `limit: 2 → 3` for richer grounding (third chunk is ~100 tokens, fits comfortably). Retry Vulkan offload (`n_gpu_layers: 99`) on Q4_0 — different layout might unblock the Mali driver.
+1. **Open + merge the PR for `feature/ck-mob/inference-tuning`** (top of next session, fresh eyes). Commit `2fcc8b3` is the keeper; the earlier 3 commits are documented experiments that net to zero change. Squash-merge with a description capturing the journey.
+2. **Half-day: ship `saveSession`/`loadSession` for the system-prompt KV state.** This is the next big win — cuts turn 1 cold-launch prefill from ~78s to ~37s on every launch after the first ever. Spec at [docs/specs/kv-state-persistence-via-savesession.md](../docs/specs/kv-prefix-cache-via-parallel-state.md). Risk profile: same shape as the RAG cache, with bigger consequences if hash invalidation has bugs (silent wrong outputs).
+3. **Bundle into #2: pre-warm `initLlama()` on app launch.** Loads the model into memory while the user is on the chat tab, before the first send. Saves another ~10-30s on cold start. Cheap addition once #2 is in flight; the saveSession piece is what makes the prefill skip-able.
+4. **Polish: streaming bubble micro-animation (typing dots / pulse).** Already streams a "consulting your library…" subtitle on send, but a subtle motion makes the wait feel responsive rather than dead. ~30 min in [ChatList.tsx](../src/components/chat/ChatList.tsx). Low impact, low effort, do whenever there's a free hour.
 
 ## Open questions / blockers
 
-- llama.rn 0.12.0-rc.5 is the pin (last RC with prebuilt JNI libs). Future stable bump needs source-build + Python 3.14/CMake 3.22 fix.
-- The cached `LlamaContext` is module-level; future settings path-override UI must call `releaseAllLlama()` and reset.
-- Latent: duplicate-row race in `modelDownloadService.start()` (concurrent `start()` calls). Doesn't cause file deletion but is messy.
+- llama.rn 0.12.0-rc.5 pin (last RC with prebuilt JNI libs). Future stable bump needs source-build fix for Python 3.14 / CMake 3.22.
+- The cached `LlamaContext` is module-level; settings path-override UI (future) must call `releaseAllLlama()` AND clear any saveSession files.
+- Latent: duplicate-row race in `modelDownloadService.start()` (concurrent calls).
 - `apiClient.post` doesn't thread an `AbortSignal`, so the 3s RAG timeout drops the response but doesn't cancel the fetch.
-- Multi-turn KV-prefix reuse (`n_keep`) — every send re-prefills the system prompt. ~3× speedup deferred until basic chat is fast on Q4_0.
+- Generation is now the bottleneck on multi-turn (~4 tok/s decode = ~16s for a 64-token reply). Speculative decoding is the next big lever after #2/#3 land, but that's full-session work.
 
 ## See also
 
 - [[project-status]] — slow-changing narrative of shipped milestones
 - [[llama-rn-inference-params]] — current parameter table with reasoning
 - [[rag-architecture]] — the data flow that shipped in PR #9
-- [[server-managed-prompts]] — the cache-with-fallback pattern that shipped in PR #9
-- [[privacy-invariant]] — the rule that PR #9's query-leaves boundary refines
-- [[model-quantization-must-be-mainline]] — why Q4_0 + mainline llama.cpp is the only path
+- [[server-managed-prompts]] — the cache-with-fallback pattern
+- [[privacy-invariant]] — the rule the RAG-cache fix preserves
+- [[model-quantization-must-be-mainline]] — why Q4_0 + mainline llama.cpp
+- `docs/specs/kv-prefix-cache-via-parallel-state.md` — full spec for the next-session work (#2 above)
 - `wiki/log.md` — append-only history
