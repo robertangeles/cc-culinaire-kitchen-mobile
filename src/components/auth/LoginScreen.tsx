@@ -1,14 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GoogleMark } from '@/components/auth/GoogleMark';
@@ -42,6 +35,35 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
     () => email.includes('@') && password.length >= 6 && (mode === 'signin' || name.length > 0),
     [email, password, mode, name],
   );
+
+  // Keyboard avoidance — same pattern as ChatScreen. KeyboardAvoidingView
+  // is unreliable on Android edge-to-edge (adjustResize is a no-op when
+  // edgeToEdgeEnabled), so we listen to imperative Keyboard events and
+  // lift the ScrollView's bottom padding by the keyboard panel height.
+  // ScrollView's built-in auto-scroll-to-focused-input handles the
+  // visibility — we just need to reserve the space.
+  const keyboardHeight = useSharedValue(0);
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', (e) => {
+      keyboardHeight.value = withTiming(e.endCoordinates.height, { duration: 250 });
+    });
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => {
+      keyboardHeight.value = withTiming(0, { duration: 250 });
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardHeight]);
+  // Animate the OUTER View's bottom padding (not contentContainerStyle).
+  // Animated.ScrollView's `contentContainerStyle` doesn't accept reanimated
+  // values directly — passing one yields a "set 'current' on a frozen
+  // object" mutation error. Lifting padding on the root View shrinks the
+  // ScrollView's available height, which makes the inner content scroll
+  // up to keep the focused TextInput above the keyboard.
+  const animatedRootPad = useAnimatedStyle(() => ({
+    paddingBottom: keyboardHeight.value,
+  }));
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -98,10 +120,7 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <Animated.View style={[styles.root, animatedRootPad]}>
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -213,7 +232,7 @@ export function LoginScreen({ onAuthed }: LoginScreenProps) {
           </Text>
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </Animated.View>
   );
 }
 
