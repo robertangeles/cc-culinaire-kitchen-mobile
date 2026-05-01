@@ -938,7 +938,11 @@ Claude must:
   `git push`. Never push automatically.
 - Small changes (< 3 files, config, docs): commit directly to `main`
 - Non-trivial changes: short-lived feature branch (max 2 days)
-- Merge to `main` with `--no-ff`
+- Merge feature branches to `main` via **squash-merge** (`gh pr merge <n> --squash --delete-branch`).
+  Branch protection on `main` has `required_linear_history` enabled, which
+  forbids merge commits with multiple parents — `git merge --no-ff` is
+  rejected. Squash collapses the branch's commits into one on `main`;
+  capture the journey in the PR description and the squash commit body.
 - Pre-commit hooks (Husky + lint-staged) run lint + format on staged files
 
 ## Branch Naming
