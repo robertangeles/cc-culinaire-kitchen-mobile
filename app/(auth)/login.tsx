@@ -12,8 +12,15 @@ export default function LoginRoute() {
         // to chat — no onboarding flash. The route guard's
         // (onboarding) → (tabs)/chat fallback covers the race where
         // hydratePrefs hasn't finished by the time onAuthed fires.
-        const isActive = useModelStore.getState().isActive;
-        router.replace(isActive ? '/(tabs)/chat' : '/(onboarding)');
+        const { isActive, isPrefsHydrated } = useModelStore.getState();
+        const target = isActive ? '/(tabs)/chat' : '/(onboarding)';
+        // Diagnostic — observable nav decision at the auth boundary.
+        // Cheap (fires once per login), high-signal when reasoning
+        // about flash / no-flash UX issues across launches.
+        console.info(
+          `[login] onAuthed → isActive=${isActive} isPrefsHydrated=${isPrefsHydrated} target=${target}`,
+        );
+        router.replace(target);
       }}
     />
   );
