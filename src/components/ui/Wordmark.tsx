@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 
+import { LiteBadge } from '@/components/ui/LiteBadge';
 import { fonts, palette } from '@/constants/theme';
 
 type WordmarkSize = 'sm' | 'md' | 'lg';
@@ -24,6 +25,9 @@ export function Wordmark({ size = 'lg', color = palette.ink }: WordmarkProps) {
         CULINAIRE
       </Text>
       <Text style={[styles.kitchen, { fontSize: 30 * scale, marginTop: 2 * scale }]}>Kitchen</Text>
+      <View style={{ marginTop: 8 * scale }}>
+        <LiteBadge scale={scale} />
+      </View>
     </View>
   );
 }

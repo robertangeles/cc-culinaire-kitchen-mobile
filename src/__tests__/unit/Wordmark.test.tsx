@@ -7,6 +7,7 @@ describe('Wordmark', () => {
     const { toJSON, getByText } = render(<Wordmark size={size} />);
     expect(getByText('CULINAIRE')).toBeTruthy();
     expect(getByText('Kitchen')).toBeTruthy();
+    expect(getByText('LITE')).toBeTruthy();
     expect(toJSON()).toMatchSnapshot();
   });
 });

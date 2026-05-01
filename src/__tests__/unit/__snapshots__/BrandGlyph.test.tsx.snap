@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+// Jest Snapshot v1, https://goo.gl/fbAQLP
 
 exports[`BrandGlyph renders the icon-only crop when compact 1`] = `
 <ViewManagerAdapter_ExpoImage
@@ -37,37 +37,85 @@ exports[`BrandGlyph renders the icon-only crop when compact 1`] = `
 `;
 
 exports[`BrandGlyph renders the lockup image by default 1`] = `
-<ViewManagerAdapter_ExpoImage
-  accessibilityLabel="CulinAIre Kitchen"
-  containerViewRef={"[React.ref]"}
-  contentFit="contain"
-  contentPosition={
-    {
-      "left": "50%",
-      "top": "50%",
-    }
-  }
-  height={240}
-  nativeViewRef={"[React.ref]"}
-  onError={[Function]}
-  onLoad={[Function]}
-  onLoadStart={[Function]}
-  onProgress={[Function]}
-  placeholder={[]}
-  source={
-    [
-      {
-        "testUri": "../../../assets/brand/ck-logo.png",
-      },
-    ]
-  }
+<View
   style={
     {
-      "height": 240,
-      "width": 240,
+      "alignItems": "center",
     }
   }
-  transition={null}
-  width={240}
-/>
+>
+  <ViewManagerAdapter_ExpoImage
+    accessibilityLabel="CulinAIre Kitchen Lite"
+    containerViewRef={"[React.ref]"}
+    contentFit="contain"
+    contentPosition={
+      {
+        "left": "50%",
+        "top": "50%",
+      }
+    }
+    height={240}
+    nativeViewRef={"[React.ref]"}
+    onError={[Function]}
+    onLoad={[Function]}
+    onLoadStart={[Function]}
+    onProgress={[Function]}
+    placeholder={[]}
+    source={
+      [
+        {
+          "testUri": "../../../assets/brand/ck-logo.png",
+        },
+      ]
+    }
+    style={
+      {
+        "height": 240,
+        "width": 240,
+      }
+    }
+    transition={null}
+    width={240}
+  />
+  <View
+    style={
+      {
+        "marginTop": -19.2,
+      }
+    }
+  >
+    <View
+      style={
+        [
+          {
+            "borderColor": "#B87840",
+            "borderWidth": 0.5,
+          },
+          {
+            "borderRadius": 3.4285714285714284,
+            "paddingHorizontal": 6.857142857142857,
+            "paddingVertical": 1.7142857142857142,
+          },
+        ]
+      }
+    >
+      <Text
+        style={
+          [
+            {
+              "color": "#B87840",
+              "fontFamily": "Inter_600SemiBold",
+            },
+            {
+              "fontSize": 8.571428571428571,
+              "letterSpacing": 1.5428571428571427,
+            },
+          ]
+        }
+      >
+        LITE
+      </Text>
+    </View>
+  </View>
+</View>
 `;

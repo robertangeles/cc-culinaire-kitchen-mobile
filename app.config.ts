@@ -13,7 +13,17 @@ import type { ExpoConfig } from 'expo/config';
  * (see `src/constants/config.ts`).
  */
 const config: ExpoConfig = {
-  name: 'cc-culinaire-kitchen-mob',
+  // Display name shown under the app icon on the device home screen.
+  // Flows into android/app/src/main/res/values/strings.xml's `app_name`
+  // on prebuild — that file is gitignored and regenerated, so this is
+  // the source of truth.
+  //
+  // "CulinAIre" capitalisation matches the in-app wordmark style
+  // (the "AI" caps reinforce the on-device-AI nature of the product).
+  // "Lite" disambiguates this build from the future Full fork; the
+  // bundle id (`package` below) still uses the dev namespace until
+  // Play Store distribution is set up.
+  name: 'CulinAIre Kitchen Lite',
   slug: 'cc-culinaire-kitchen-mob',
   version: '1.0.0',
   orientation: 'portrait',
