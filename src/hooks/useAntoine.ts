@@ -19,6 +19,31 @@ import type { InferenceMessage } from '@/types/inference';
 // causes infinite re-renders when there's no active conversation.
 const EMPTY_MESSAGES: Message[] = [];
 
+/**
+ * Default user-visible text injected when the caller fires an image-only
+ * send (photo attached, no typed text). Without this, the user-message
+ * bubble would render as an image with no caption AND Antoine would
+ * receive an empty user-text turn — neither composes well across the
+ * five real-world image use cases (identify, fix, technique, plate idea,
+ * critique). The chef-voiced default opens the door without committing
+ * to a specific intent; Antoine's reply naturally branches based on
+ * what the photo actually shows.
+ */
+const IMAGE_ONLY_DEFAULT_TEXT = "Take a look at this. What's your read?";
+
+/**
+ * Appended to the active system prompt whenever the current send carries
+ * an image. Reframes Antoine's response to be image-aware regardless of
+ * what (if anything) the user typed alongside the photo. Kept short to
+ * preserve token budget AND deliberately avoids any "first… then…"
+ * sequencing that Gemma 3n reads as a chain-of-thought trigger — empirically
+ * any imperative-stepwise phrasing here makes the model emit a
+ * `<|channel|>thought` block into the user-visible output, even with
+ * `chat_template_kwargs.enable_thinking = ''` set on the completion call.
+ */
+const SYSTEM_PROMPT_IMAGE_ADDENDUM =
+  '\n\nAn image is attached. Use it as the primary context for your reply.';
+
 function makeMessage(
   conversationId: string,
   role: 'user' | 'assistant',
@@ -60,7 +85,15 @@ export function useAntoine() {
       if (!userId) return;
       setError(null);
       const conversationId = activeId ?? (await startNew(userId));
-      const userMessage = makeMessage(conversationId, 'user', content, imageUri);
+
+      // Image-only sends arrive here with content === '' (the attachment
+      // sheet's onAttachmentPicked fires send('', uri) with no chance to
+      // type). Inject a chef-voiced default so the user-message bubble
+      // is parseable, RAG has a query, and Antoine has a real prompt.
+      const hasImage = !!imageUri;
+      const effectiveContent =
+        content.trim().length === 0 && hasImage ? IMAGE_ONLY_DEFAULT_TEXT : content;
+      const userMessage = makeMessage(conversationId, 'user', effectiveContent, imageUri);
       await addMessage(conversationId, userMessage);
 
       // Wait for the boot disk-check to complete before deciding the
@@ -111,16 +144,29 @@ export function useAntoine() {
         const cachedChunks =
           useConversationStore.getState().ragChunksByConversation[conversationId];
         const isFirstRagFetch = cachedChunks === undefined;
+        // Defensive guard: ragService.retrieve throws on an empty query
+        // (it's a programmer-error assertion). The image-only injection
+        // above means `effectiveContent` should always be non-empty by
+        // the time we reach here, but keep the skip path so a future
+        // call site that fires send('', undefined) doesn't crash.
+        const trimmedContent = effectiveContent.trim();
+        const skipRag = trimmedContent.length === 0;
         console.info(
           `[useAntoine] stage=retrieving — fetching prompt${
-            isFirstRagFetch ? ' + RAG (first turn)' : ''
-          }${!isFirstRagFetch ? ` (RAG reused from cache, ${cachedChunks.length} chunks)` : ''}`,
+            skipRag ? ' (RAG skipped — empty query, defensive)' : ''
+          }${!skipRag && isFirstRagFetch ? ' + RAG (first turn)' : ''}${
+            !skipRag && !isFirstRagFetch
+              ? ` (RAG reused from cache, ${cachedChunks.length} chunks)`
+              : ''
+          }`,
         );
-        const ragPromise: Promise<RagChunk[]> = isFirstRagFetch
-          ? retrieve(content, { limit: 2 })
-          : Promise.resolve(cachedChunks);
+        const ragPromise: Promise<RagChunk[]> = skipRag
+          ? Promise.resolve([])
+          : isFirstRagFetch
+            ? retrieve(trimmedContent, { limit: 2 })
+            : Promise.resolve(cachedChunks);
         const [systemPrompt, ragChunks] = await Promise.all([getActivePrompt(), ragPromise]);
-        if (isFirstRagFetch && ragChunks.length > 0) {
+        if (!skipRag && isFirstRagFetch && ragChunks.length > 0) {
           // Freeze the first non-empty result for the rest of this
           // conversation. We deliberately skip caching empty arrays so
           // the next turn can retry retrieval.
@@ -144,13 +190,20 @@ export function useAntoine() {
         // RAG context block as a second system message, then conversation
         // history. The model is instructed (via the system prompt or
         // training) to cite [n] references when the RAG block is present.
+        //
+        // When this turn has an image attached, append the photo
+        // addendum to the system message — frames Antoine to look at
+        // the photo first and ground his guidance in what he observes.
         const ragBlock = formatRagContext(ragChunks);
+        const systemContent = hasImage
+          ? `${systemPrompt}${SYSTEM_PROMPT_IMAGE_ADDENDUM}`
+          : systemPrompt;
         const history: InferenceMessage[] = [...messages, userMessage].map((m) => ({
           role: m.role === 'system' ? 'system' : m.role,
           content: m.content,
         }));
         const inferenceMessages: InferenceMessage[] = [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: systemContent },
           ...(ragBlock ? [{ role: 'system' as const, content: ragBlock }] : []),
           ...history,
         ];

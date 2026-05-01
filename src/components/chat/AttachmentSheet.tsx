@@ -17,6 +17,15 @@ export type AttachmentResult = { type: 'image' | 'file'; uri: string };
 
 interface AttachmentSheetProps {
   onPicked: (result: AttachmentResult) => void;
+  /**
+   * Called BEFORE each picker (camera / library / files) launches so
+   * the bottom sheet animates closed first. Without this, the sheet
+   * stays mounted while the picker intent is up — taps that confirm
+   * a photo selection in the camera UI can leak through to the still-
+   * pressable "Take photo" row underneath, re-firing the picker after
+   * the user thought they were done.
+   */
+  requestDismiss?: () => void;
 }
 
 function renderBackdrop(props: BottomSheetBackdropProps) {
@@ -24,28 +33,33 @@ function renderBackdrop(props: BottomSheetBackdropProps) {
 }
 
 export const AttachmentSheet = forwardRef<BottomSheetModal, AttachmentSheetProps>(
-  function AttachmentSheet({ onPicked }, ref) {
+  function AttachmentSheet({ onPicked, requestDismiss }, ref) {
     const snapPoints = useMemo(() => ['40%'], []);
 
     const onCamera = useCallback(async () => {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (perm.status !== 'granted') return;
+      // Dismiss the sheet BEFORE the camera intent launches so its rows
+      // can't intercept the "select photo" tap when the user returns.
+      requestDismiss?.();
       const r = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 });
       if (!r.canceled && r.assets[0]) onPicked({ type: 'image', uri: r.assets[0].uri });
-    }, [onPicked]);
+    }, [onPicked, requestDismiss]);
 
     const onLibrary = useCallback(async () => {
+      requestDismiss?.();
       const r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 0.85 });
       if (!r.canceled && r.assets[0]) onPicked({ type: 'image', uri: r.assets[0].uri });
-    }, [onPicked]);
+    }, [onPicked, requestDismiss]);
 
     const onFiles = useCallback(async () => {
+      requestDismiss?.();
       const r = await DocumentPicker.getDocumentAsync({
         multiple: false,
         copyToCacheDirectory: true,
       });
       if (!r.canceled && r.assets[0]) onPicked({ type: 'file', uri: r.assets[0].uri });
-    }, [onPicked]);
+    }, [onPicked, requestDismiss]);
 
     const items: readonly {
       id: string;

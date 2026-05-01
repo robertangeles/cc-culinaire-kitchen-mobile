@@ -89,9 +89,11 @@ export function ChatScreen() {
 
   const onSend = useCallback((text: string) => void send(text), [send]);
 
+  // The sheet is now dismissed BEFORE the picker launches (see
+  // AttachmentSheet.requestDismiss), so by the time onPicked fires the
+  // sheet is already animating out — no need to dismiss again here.
   const onAttachmentPicked = useCallback(
     (r: { type: 'image' | 'file'; uri: string }) => {
-      attachmentRef.current?.dismiss();
       void send(
         r.type === 'image' ? '' : `[file: ${r.uri.split('/').pop() ?? 'attachment'}]`,
         r.uri,
@@ -99,6 +101,10 @@ export function ChatScreen() {
     },
     [send],
   );
+
+  const dismissAttachmentSheet = useCallback(() => {
+    attachmentRef.current?.dismiss();
+  }, []);
 
   const onMicPress = useCallback(() => {
     setRecording(true);
@@ -170,7 +176,11 @@ export function ChatScreen() {
         onPressMic={onMicPress}
       />
 
-      <AttachmentSheet ref={attachmentRef} onPicked={onAttachmentPicked} />
+      <AttachmentSheet
+        ref={attachmentRef}
+        onPicked={onAttachmentPicked}
+        requestDismiss={dismissAttachmentSheet}
+      />
       <HistorySheet
         ref={historyRef}
         conversations={conversations}

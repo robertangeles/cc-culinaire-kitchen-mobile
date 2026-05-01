@@ -305,6 +305,56 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     expect(s.streamingStage).toBeNull();
   });
 
+  it('image-only send: injects a chef-voiced default + image-aware system addendum', async () => {
+    // Image-only sends arrive with content='' from the attachment sheet's
+    // onAttachmentPicked. The hook injects a default user message so:
+    //   1. The user-bubble in the conversation has parseable text (not blank)
+    //   2. ragService.retrieve has a query (no programmer-error throw)
+    //   3. Antoine receives a real prompt for the model to act on
+    // Plus: the system message gets a photo-aware addendum.
+    const llamaCompletion = jest.spyOn(
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      require('@/services/inferenceService'),
+      'completion',
+    );
+    const { result } = renderHook(() => useAntoine());
+
+    await act(async () => {
+      await result.current.send('', 'file:///mock/photo.jpg');
+    });
+
+    // Visible user message in the conversation: chef-voiced default text +
+    // the image attachment URI both present.
+    const insertCalls = (messageQueries.insert as jest.Mock).mock.calls.map((c) => c[0]);
+    const userInsert = insertCalls.find((c) => c.role === 'user');
+    expect(userInsert?.content).toBe("Take a look at this. What's your read?");
+    expect(userInsert?.imageUri).toBe('file:///mock/photo.jpg');
+
+    // RAG retrieve is called with the injected text (not the empty caller
+    // content) — keeps the prefix-cache discipline consistent.
+    expect(retrieveMock).toHaveBeenCalledWith(
+      "Take a look at this. What's your read?",
+      expect.objectContaining({ limit: 2 }),
+    );
+
+    // System message includes the photo-addendum so Antoine reframes
+    // around the image rather than the chitchat-default text.
+    expect(llamaCompletion).toHaveBeenCalled();
+    const messages = (
+      llamaCompletion.mock.calls[0]?.[1] as { messages: { role: string; content: string }[] }
+    ).messages;
+    const systemMsg = messages[0];
+    expect(systemMsg?.role).toBe('system');
+    expect(systemMsg?.content).toMatch(/photo|image/i);
+
+    // No error fallback got persisted — the send completed cleanly.
+    const errorFallback = insertCalls.find(
+      (c) => c.role === 'assistant' && /empty query|stalled/i.test(c.content),
+    );
+    expect(errorFallback).toBeFalsy();
+    llamaCompletion.mockRestore();
+  });
+
   it('writes the "pick a chef" fallback when the model is not active, without invoking inference', async () => {
     useModelStore.setState({ isActive: false });
     const { result } = renderHook(() => useAntoine());
