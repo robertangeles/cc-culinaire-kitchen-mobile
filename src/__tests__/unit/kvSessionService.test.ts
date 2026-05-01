@@ -304,6 +304,50 @@ describe('saveSystemPromptKV', () => {
     expect(fsMock.writeAsStringAsync).not.toHaveBeenCalled();
   });
 
+  it('prunes orphan files from prior prompt versions after a successful save', async () => {
+    // First getInfoAsync (ensureKvStateDir) → dir exists.
+    // Second getInfoAsync (pruneOrphanKvFiles) → dir exists.
+    fsMock.getInfoAsync.mockResolvedValue({
+      exists: true,
+      uri: KV_DIR_URI,
+      isDirectory: true,
+    } as Awaited<ReturnType<typeof FileSystem.getInfoAsync>>);
+    // Directory listing includes the soon-to-be-current prefix's files,
+    // an OLD prompt version's files (orphans), and an unrelated file.
+    fsMock.readDirectoryAsync.mockResolvedValue([
+      `system-prompt-${FAKE_HASH_PREFIX}.bin`, // current — keep
+      `system-prompt-${FAKE_HASH_PREFIX}.json`, // current — keep
+      'system-prompt-deadbeefcafe.bin', // orphan — delete
+      'system-prompt-deadbeefcafe.json', // orphan — delete
+      'unrelated-debug.txt', // not a sidecar pattern — leave
+    ]);
+    const ctx = makeFakeContext();
+
+    await saveSystemPromptKV(ctx, FAKE_PROMPT);
+
+    // Save itself wrote both the .bin (via native) and the .json sidecar.
+    expect(ctx.native.saveSession).toHaveBeenCalledTimes(1);
+    expect(fsMock.writeAsStringAsync).toHaveBeenCalledTimes(1);
+
+    // Orphan files were deleted; current files were left alone.
+    expect(fsMock.deleteAsync).toHaveBeenCalledWith(
+      `file://${KV_DIR}/system-prompt-deadbeefcafe.bin`,
+      { idempotent: true },
+    );
+    expect(fsMock.deleteAsync).toHaveBeenCalledWith(
+      `file://${KV_DIR}/system-prompt-deadbeefcafe.json`,
+      { idempotent: true },
+    );
+    expect(fsMock.deleteAsync).not.toHaveBeenCalledWith(
+      `file://${KV_DIR}/system-prompt-${FAKE_HASH_PREFIX}.bin`,
+      expect.anything(),
+    );
+    expect(fsMock.deleteAsync).not.toHaveBeenCalledWith(
+      `file://${KV_DIR}/unrelated-debug.txt`,
+      expect.anything(),
+    );
+  });
+
   it('skips save when tokenize returns zero tokens', async () => {
     fsMock.getInfoAsync.mockResolvedValue({
       exists: true,

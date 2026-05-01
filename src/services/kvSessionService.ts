@@ -139,6 +139,41 @@ async function deleteKvFiles(bin: string, sidecar: string): Promise<void> {
 }
 
 /**
+ * Best-effort cleanup of saved KV files left behind by prior prompt
+ * versions. Without this, every system-prompt edit would leak ~10–13 MB
+ * to disk forever (the file path is keyed by prompt hash prefix, so an
+ * edited prompt writes to a fresh path and leaves the old one alone).
+ *
+ * Called from `saveSystemPromptKV` AFTER the new file is fully on disk,
+ * so a cleanup failure can never lose the live state. Failures are
+ * swallowed — the orphan stays harmlessly until the next save.
+ */
+async function pruneOrphanKvFiles(currentPrefix: string): Promise<void> {
+  try {
+    const dir = await getKvStateDir();
+    const info = await FileSystem.getInfoAsync(toFileUri(dir));
+    if (!info.exists) return;
+    const entries = await FileSystem.readDirectoryAsync(toFileUri(dir));
+    const keepBin = `${SIDECAR_PREFIX}${currentPrefix}.bin`;
+    const keepSidecar = `${SIDECAR_PREFIX}${currentPrefix}.json`;
+    const orphans = entries.filter(
+      (name) => name.startsWith(SIDECAR_PREFIX) && name !== keepBin && name !== keepSidecar,
+    );
+    if (orphans.length === 0) return;
+    console.info(`[kvSession] pruning ${orphans.length} orphan file(s)`);
+    await Promise.all(
+      orphans.map((name) =>
+        FileSystem.deleteAsync(toFileUri(joinPath(dir, name)), { idempotent: true }).catch(
+          () => undefined,
+        ),
+      ),
+    );
+  } catch (e) {
+    console.warn('[kvSession] pruneOrphanKvFiles failed:', e);
+  }
+}
+
+/**
  * Try to restore the system-prompt KV state for `prompt`. Returns true
  * iff the saved state matched the current prompt + runtime AND the
  * native loadSession reported the expected token count.
@@ -242,6 +277,12 @@ export async function saveSystemPromptKV(ctx: LlamaContext, prompt: string): Pro
     await FileSystem.writeAsStringAsync(toFileUri(sidecar), JSON.stringify(sidecarMeta));
     const elapsed = Date.now() - start;
     console.info(`[kvSession] saved ${tokenSize} tokens in ${elapsed}ms`);
+
+    // New state is durable on disk — now clean up any files left over
+    // from prior prompt versions. Best-effort; orphan cleanup never
+    // runs before the new save lands, so a prune failure can't strand
+    // us without a usable saved state.
+    await pruneOrphanKvFiles(prefix);
   } catch (e) {
     console.warn('[kvSession] saveSystemPromptKV failed:', e);
   }

@@ -43,7 +43,11 @@ configureGoogleSignIn();
 SplashScreen.preventAutoHideAsync();
 
 function RouteGuard() {
-  const segments = useSegments();
+  // useSegments' default generic infers a literal 1-tuple in newer
+  // expo-router types, which makes the segments[1] read on the
+  // verify-email path fail strict tsc. Cast to string[] so length-1+
+  // access is a normal `string | undefined` (handled by the equality).
+  const segments = useSegments() as string[];
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isHydrated = useAuthStore((s) => s.isHydrated);
