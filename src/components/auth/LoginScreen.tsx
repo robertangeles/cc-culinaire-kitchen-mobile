@@ -25,13 +25,20 @@ type Mode = 'signin' | 'register';
 
 interface LoginScreenProps {
   onAuthed: () => void;
+  /**
+   * Pre-fill the email field. Used by the verify-email screen's
+   * "I verified, continue" handler to route a user who has just
+   * verified externally back into the sign-in flow without making
+   * them re-type the email they just registered with.
+   */
+  initialEmail?: string;
 }
 
-export function LoginScreen({ onAuthed }: LoginScreenProps) {
+export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('signin');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(initialEmail ?? '');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [showPw, setShowPw] = useState(false);

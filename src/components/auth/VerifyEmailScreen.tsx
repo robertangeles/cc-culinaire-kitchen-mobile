@@ -8,6 +8,7 @@ import { CopperButton } from '@/components/ui/CopperButton';
 import { GhostButton } from '@/components/ui/GhostButton';
 import { fonts, palette, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthStore } from '@/store/authStore';
 
 interface VerifyEmailScreenProps {
   /** Email to display in the message. Pre-filled from registration or the
@@ -31,6 +32,26 @@ export function VerifyEmailScreen({ email }: VerifyEmailScreenProps) {
 
   const continueClick = async () => {
     setHint(null);
+
+    // Two reachable paths land users on this screen:
+    //   1. Login attempt threw `EmailNotVerifiedError` — tokens are
+    //      present in the auth store, the user just needs the verified
+    //      flag to flip true. `refreshUser()` re-fetches /auth/me.
+    //   2. Just-registered path — `register()` succeeded but the
+    //      follow-up `login()` threw `EmailNotVerifiedError` BEFORE any
+    //      tokens were stored. The auth store is empty.
+    //
+    // Path #2 needs a different handler: there's nothing to refresh,
+    // and the route guard doesn't have a user to route. Send the
+    // user back to the sign-in form with the email pre-filled — they
+    // re-enter their password (now that the account is verified the
+    // login call succeeds, tokens persist, route guard takes over).
+    const hasRefreshToken = !!useAuthStore.getState().refreshToken;
+    if (!hasRefreshToken) {
+      router.replace({ pathname: '/(auth)/login', params: { email } });
+      return;
+    }
+
     try {
       const fresh = await refreshUser();
       if (fresh.emailVerified) {
