@@ -25,18 +25,18 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Currently in flight
 
-Nothing blocked. Branch state clean.
+Nothing blocked. Branch state clean. **Vulkan GPU offload investigated and parked** — see decision log entry [2026-05-01] in `../cc-culinaire-shared-context/decisions.md`. Weekly recurring monitor (claude.ai routine `trig_01S6Yk7CnGzxVzo2J698aaCv`) watches llama.rn for Vulkan in the prebuilt JNI; fires every Mon 09:00 AEST.
 
 ## Next action — RECOMMENDED ORDER
 
-1. **Vulkan GPU offload retry on Q4_0** (~30 min to confirm available; up to half-day to ship behind feature flag with CPU fallback). Mali-G615 + Q4_K_M crashed previously, but Q4_0's NEON-friendly layout might unblock the GPU path. If JNI doesn't include the Vulkan backend, abort + park. Upside if it works: prefill 9 → 30+ tok/s, cold turn 1 ~85s → ~20s.
-2. **Park speculative decoding for v3** based on real user feedback after this milestone ships. Decode bottleneck is the next-biggest lever (~4 tok/s today → 8–12 tok/s with a 1B Gemma draft model), but it costs ~600–800 MB of additional model download. Wait for users to actually complain about decode latency before paying that.
-3. **Polish: streaming-bubble micro-animation** in [src/components/chat/ChatList.tsx](../src/components/chat/ChatList.tsx). ~30 min, low impact, do whenever there's a free hour.
+1. **Wait for the weekly Vulkan monitor to fire green.** Until upstream llama.rn ships Vulkan in the standard prebuilt JNI, GPU offload is blocked: the current pin (0.12.0-rc.5) and every newer published version (rc.6–rc.9) only ship CPU + OpenCL+Hexagon, and the OpenCL+Hexagon variant only routes to Qualcomm devices (our Mediatek Dimensity 7300 falls back to CPU-only). When the agent reports "Vulkan in prebuilt", react fast: bump the pin, set `n_gpu_layers > 0`, test on device with CPU fallback wired in.
+2. **Polish: streaming-bubble micro-animation** in [src/components/chat/ChatList.tsx](../src/components/chat/ChatList.tsx). ~30 min, low impact, do whenever there's a free hour.
+3. **Speculative decoding for v3** — parked, gated on user feedback about decode speed (~4 tok/s today → 8–12 tok/s with a 1B Gemma draft model, but costs ~600–800 MB extra download). Wait for users to complain.
 4. **Backlog:** PR #7 (wiki CRLF parser fix) and PR #8 (CI workflow) still open, unrelated to inference. Triage when convenient.
 
 ## Open questions / blockers
 
-- llama.rn 0.12.0-rc.5 pin — Vulkan backend likely not in the prebuilt JNI; bump path needs a source build (Python 3.14 / CMake 3.22 issue from yesterday).
+- llama.rn 0.12.0-rc.5 pin — Vulkan backend confirmed NOT in any published prebuilt JNI through rc.9 (verified via `find -iname '*vulkan*'` + binary `strings` probe + release-notes scan). Source-build path requires fixing the Python 3.14 / CMake 3.22 issue. Parked until upstream ships or speculative decoding becomes the priority.
 - The cached `LlamaContext` is module-level in `inferenceService.ts`. Settings path-override UI (future) must call `releaseCachedContext()` AND `deleteSavedKV()`.
 - Latent: duplicate-row race in `modelDownloadService.start()` (concurrent calls).
 - `apiClient.post` doesn't thread an `AbortSignal`, so the 3s RAG timeout drops the response but doesn't cancel the fetch.

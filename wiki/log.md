@@ -4,6 +4,26 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-01 (afternoon) — Vulkan GPU offload investigated, parked
+
+Quick post-PR-12 follow-up. After bagging the saveSession win, investigated the next-action #1 on the in-flight list: Vulkan GPU offload retry on Q4_0.
+
+1. **Probed the local llama.rn 0.12.0-rc.5 binary** — `find -iname "*vulkan*"` returned zero. The most-feature-rich prebuilt variant (`librnllama_v8_2_dotprod_i8mm_hexagon_opencl.so`, 9.3 MB) contains OpenCL kernel code (`#pragma OPENCL EXTENSION cl_khr_fp16`, `clCreateKernel`) and Hexagon DSP code (`HAP_debug_runtime`) but no Vulkan strings. The OpenCL+Hexagon variant only loads on Qualcomm devices via runtime detection — on the Mediatek Dimensity 7300 in our test phone, the runtime falls back to a CPU-only variant.
+
+2. **Checked upstream releases** — `pnpm view llama.rn` shows latest is `0.12.0-rc.9` (4 RCs newer than our pin). Release notes for rc.6–rc.9 contain only llama.cpp upstream syncs and bug fixes — no mentions of Vulkan, GPU, n_gpu_layers, Mali, or Adreno.
+
+3. **Conclusion: Vulkan path blocked on the npm-published prebuilt.** Source-build path requires fixing the Python 3.14 / CMake 3.22 issue from yesterday's branch. Three forward paths surfaced: (A) source-build with Vulkan (high effort, brittle, Mali driver quality unknown), (B) park + recurring monitor (cheap), (C) pivot to speculative decoding (v3 lever).
+
+4. **Decision: Path B.** Cancelled the previously-scheduled one-shot agent (`trig_01S6Yk7CnGzxVzo2J698aaCv`) and converted it to a weekly recurring check (Mon 09:00 AEST = Sun 23:00 UTC, cron `0 23 * * 0`). The agent's brief is now: be quiet when nothing has changed; only do detailed binary inspection if `latest` is newer than 0.12.0-rc.9.
+
+5. **Cross-project decisions log updated.** Added 2026-05-01 entry to `../cc-culinaire-shared-context/decisions.md` so the web/backend session sees the same decision rationale.
+
+6. **Wiki rotated.** in-flight.md: removed Vulkan from next-actions #1, replaced with "wait for the weekly monitor to fire green"; updated open-questions block to reflect the verified absence rather than the prior speculation.
+
+**Status:** Nothing actionable on inference perf this week. CPU path stays primary. Streaming-bubble micro-animation polish is the next free-hour task; speculative decoding remains gated on real user feedback about decode latency.
+
+---
+
 ## 2026-05-01 (mid-day) — KV-state persistence shipped (PR #12 squash-merge `1e90499`)
 
 Full-day session focused on the `saveSession`/`loadSession` spec from yesterday's plan. Merged.
