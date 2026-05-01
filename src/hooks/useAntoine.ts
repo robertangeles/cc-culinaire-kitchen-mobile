@@ -198,10 +198,42 @@ export function useAntoine() {
         const systemContent = hasImage
           ? `${systemPrompt}${SYSTEM_PROMPT_IMAGE_ADDENDUM}`
           : systemPrompt;
-        const history: InferenceMessage[] = [...messages, userMessage].map((m) => ({
-          role: m.role === 'system' ? 'system' : m.role,
-          content: m.content,
-        }));
+
+        // Visibility check: if the user attached an image but the
+        // multimodal projector isn't initialized on this context, the
+        // model receives no image bytes and will hallucinate content.
+        // Warn loudly so this regression is obvious in logcat — fall
+        // back to text-only inference rather than failing.
+        const visionAvailable = ctx.multimodalEnabled;
+        if (hasImage && !visionAvailable) {
+          console.warn(
+            '[useAntoine] image attached but multimodal projector not initialized — model will run text-only on this turn (will hallucinate content for the image)',
+          );
+        }
+
+        // For each historical user message that carries an imageUri,
+        // build OAI-style content parts so the model receives the
+        // image bytes. Plain string content stays for text-only
+        // messages and assistant replies.
+        const history: InferenceMessage[] = [...messages, userMessage].map((m) => {
+          const isUserWithImage = m.role === 'user' && !!m.imageUri && visionAvailable;
+          if (isUserWithImage) {
+            const fileUri = m.imageUri!.startsWith('file://')
+              ? m.imageUri!
+              : `file://${m.imageUri}`;
+            return {
+              role: 'user',
+              content: [
+                { type: 'image_url' as const, image_url: { url: fileUri } },
+                ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+              ],
+            };
+          }
+          return {
+            role: m.role === 'system' ? 'system' : m.role,
+            content: m.content,
+          };
+        });
         const inferenceMessages: InferenceMessage[] = [
           { role: 'system', content: systemContent },
           ...(ragBlock ? [{ role: 'system' as const, content: ragBlock }] : []),
@@ -210,9 +242,18 @@ export function useAntoine() {
 
         // Stage 3 — stream tokens.
         setStreamingStage('streaming');
-        const totalChars = inferenceMessages.reduce((n, m) => n + m.content.length, 0);
+        // String-content sum for the log; content-part messages
+        // contribute roughly the text part's length.
+        const totalChars = inferenceMessages.reduce((n, m) => {
+          if (typeof m.content === 'string') return n + m.content.length;
+          return (
+            n + m.content.reduce((p, part) => (part.type === 'text' ? p + part.text.length : p), 0)
+          );
+        }, 0);
         console.info(
-          `[useAntoine] stage=streaming — messages=${inferenceMessages.length} chars=${totalChars} (~${Math.ceil(totalChars / 4)}tok)`,
+          `[useAntoine] stage=streaming — messages=${inferenceMessages.length} chars=${totalChars} (~${Math.ceil(totalChars / 4)}tok)${
+            hasImage && visionAvailable ? ' [vision]' : ''
+          }`,
         );
         const result = await completion(ctx, { messages: inferenceMessages }, (token) =>
           appendStreamingToken(token),

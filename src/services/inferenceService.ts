@@ -26,8 +26,10 @@ import {
 } from 'llama.rn';
 import llamaRnPkg from 'llama.rn/package.json';
 
+import * as FileSystem from 'expo-file-system/legacy';
+
 import { ANTOINE_SYSTEM_PROMPT } from '@/constants/antoine';
-import { getMainModelPath } from '@/services/modelLocator';
+import { getMainModelPath, getMmprojPath, toFileUri } from '@/services/modelLocator';
 import type { InferenceMessage, InferenceResult } from '@/types/inference';
 
 // Surface llama.cpp's native stderr (model load failures, gguf format
@@ -55,6 +57,13 @@ export interface LlamaContext {
   id: number;
   modelPath: string;
   native: NativeLlamaContext;
+  /**
+   * True iff `initMultimodal` was called on this context AND succeeded.
+   * Callers passing image attachments should check this and fall back to
+   * text-only when false (otherwise the model receives no image bytes
+   * and hallucinates content). See `useAntoine.send`.
+   */
+  multimodalEnabled: boolean;
 }
 
 /**
@@ -131,6 +140,38 @@ const STOP_TOKEN_SET = new Set<string>(STOP_TOKENS);
  */
 let timingTurnCounter = 0;
 
+/**
+ * Best-effort multimodal initialization. Calls `native.initMultimodal`
+ * with the mmproj projector path. Returns false (and logs a warning)
+ * on any failure — caller should fall back to text-only inference.
+ *
+ * Why best-effort: the mmproj file is a separate ~1 GB download; on a
+ * fresh install or after a settings reset it may not be on disk yet.
+ * The chat path stays usable for text without it.
+ */
+async function tryInitMultimodal(native: NativeLlamaContext, mmprojPath: string): Promise<boolean> {
+  try {
+    const fileInfo = await FileSystem.getInfoAsync(toFileUri(mmprojPath));
+    if (!fileInfo.exists) {
+      console.warn(`[inferenceService] mmproj not on disk at ${mmprojPath} — vision disabled`);
+      return false;
+    }
+    const ok = await native.initMultimodal({ path: mmprojPath, use_gpu: false });
+    if (!ok) {
+      console.warn('[inferenceService] initMultimodal returned false — mmproj load failed');
+      return false;
+    }
+    const support = await native.getMultimodalSupport();
+    console.info(
+      `[inferenceService] multimodal initialized — vision=${support.vision} audio=${support.audio}`,
+    );
+    return support.vision;
+  } catch (e) {
+    console.warn('[inferenceService] tryInitMultimodal threw:', e);
+    return false;
+  }
+}
+
 export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   if (__forceError.value) {
     throw new Error('Couldn’t load Antoine. Check the model files in Settings.');
@@ -175,7 +216,12 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // dropped before the native binding in 0.12.0-rc.5. Param was
     // added in a later llama.rn release.
   });
-  return { id: native.id, modelPath: options.model, native };
+  // Wire the mmproj projector for vision input if the caller passed a
+  // path. Best-effort — text-only inference works fine without it.
+  const multimodalEnabled = options.mmproj
+    ? await tryInitMultimodal(native, options.mmproj)
+    : false;
+  return { id: native.id, modelPath: options.model, native, multimodalEnabled };
 }
 
 /**
@@ -193,7 +239,10 @@ let cachedContext: LlamaContext | null = null;
 export async function ensureContext(): Promise<LlamaContext> {
   if (cachedContext) return cachedContext;
   const modelPath = await getMainModelPath();
-  cachedContext = await initLlama({ model: modelPath });
+  // Resolve the mmproj path — it may or may not be on disk; tryInitMultimodal
+  // verifies existence and downgrades gracefully to text-only.
+  const mmprojPath = await getMmprojPath().catch(() => undefined);
+  cachedContext = await initLlama({ model: modelPath, mmproj: mmprojPath });
   return cachedContext;
 }
 
