@@ -12,16 +12,17 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**KV-state persistence shipped. Cold-launch turn 1 cut from ~80s → ~70s on a trimmed prompt; warm boot turn 1 cuts ~9s by skipping the system-prompt slice; turn 2 still ~1.5–2s.** PR #12 squash-merged as `1e90499` (super-bundle: saveSession/loadSession + boot-effect pre-warm + 5 invalidation triggers + orphan-cleanup helper + tsc fix for `useSegments`). Verified end-to-end across 5 device scenarios on the Moto G86 Power.
+**Lite branding shipped + post-auth onboarding flash fixed.** PR #14 squash-merged as `f143b49`. The app is now visibly differentiated as the Lite build wherever the brand mark appears, and returning users no longer see the onboarding screen flash between sign-in and the chat tab. Display name in `app.config.ts` is `CulinAIre Kitchen Lite` — picks up on next `pnpm android` rebuild for the home-screen icon label.
 
-`feature/ck-mob/kv-session-persistence` branch deleted on remote. Local `main` synced.
+Earlier today: PR #13 (`190bc64`) — streaming-bubble verb rotation; PR #12 (`1e90499`) — KV-state persistence + boot pre-warm. Plus branch protection on main applied via `gh api`. All branches deleted on remote, local `main` synced.
 
-## Last completed (this session)
+## Last completed (today)
 
-- **PR #12 merged (`1e90499`).** New `kvSessionService` with SHA-256 (via `expo-crypto`) prompt-hash invalidation, runtime-fingerprint check, llama.rn version check, corrupt-file fallback, tokens_loaded mismatch check. Plus orphan-cleanup helper that runs after each save and deletes prior-prompt-version files (without it, every system-prompt edit leaked ~10–13 MB).
-- **System prompt trimmed organically during testing** from 475 → 329 tokens (web admin, no code change). Cold turn 1 prefill 87.9s → 70.3s on Moto G86 Power.
-- **Cross-version sweep verified:** v6 (412 tok, 44.7s) → v7 (736 tok, 81.6s) → v8 (786 tok, 87.9s) → v9 (642 tok, 70.3s). Per-prompt-token cost ~9 tok/s prefill.
-- **Wiki updated:** privacy-invariant.md (kv-state files added to audit list), llama-rn-inference-params.md (KV session persistence subsection + 5 invalidation triggers).
+- **PR #14 merged (`f143b49`).** Rebrand to "CulinAIre Kitchen Lite" — display name in `app.config.ts`, new `LiteBadge` component (copper-outlined Inter pill), wired into `Wordmark` and `BrandGlyph` (auto-suppressed on tiny compact icons via the `withLiteBadge ?? (!compact && size >= 80)` heuristic). Plus drive-by fixes: `app/(auth)/login.tsx` reads `useModelStore.getState().isActive` to skip onboarding when the model is on disk; `app/_layout.tsx` RouteGuard subscribes to `isActive` as a backstop for the hydratePrefs race; new `[login] onAuthed → isActive=… target=…` breadcrumb log.
+- **PR #13 merged (`190bc64`).** Rotate 84 culinary verbs in the streaming bubble during the pre-token prefill wait. `src/constants/culinaryVerbs.ts` + inline `useRotatingCulinaryVerb` in `ChatList`. 2.2s cadence, never repeats back-to-back.
+- **PR #12 merged (`1e90499`).** KV-state save/load via `kvSessionService` with five invalidation triggers + orphan-cleanup helper. Cuts cold-launch turn 1 prefill from ~80s to ~70s on the trimmed v9 prompt; warm boot saves another ~9s.
+- **Branch protection on main applied** via `gh api`: `enforce_admins`, `required_linear_history`, no force pushes, no deletions. Status checks (lint/tsc/test) deferred until PR #8 (CI workflow) lands.
+- **System prompt trimmed** organically during testing: 475 → 329 tokens. Cold turn 1 prefill ~88s → ~70s.
 
 ## Currently in flight
 
@@ -29,15 +30,16 @@ Nothing blocked. Branch state clean. **Vulkan GPU offload investigated and parke
 
 ## Next action — RECOMMENDED ORDER
 
-1. **Wait for the weekly Vulkan monitor to fire green.** Until upstream llama.rn ships Vulkan in the standard prebuilt JNI, GPU offload is blocked: the current pin (0.12.0-rc.5) and every newer published version (rc.6–rc.9) only ship CPU + OpenCL+Hexagon, and the OpenCL+Hexagon variant only routes to Qualcomm devices (our Mediatek Dimensity 7300 falls back to CPU-only). When the agent reports "Vulkan in prebuilt", react fast: bump the pin, set `n_gpu_layers > 0`, test on device with CPU fallback wired in.
-2. **Polish: streaming-bubble micro-animation** in [src/components/chat/ChatList.tsx](../src/components/chat/ChatList.tsx). ~30 min, low impact, do whenever there's a free hour.
-3. **Speculative decoding for v3** — parked, gated on user feedback about decode speed (~4 tok/s today → 8–12 tok/s with a 1B Gemma draft model, but costs ~600–800 MB extra download). Wait for users to complain.
-4. **Backlog:** PR #7 (wiki CRLF parser fix) and PR #8 (CI workflow) still open, unrelated to inference. Triage when convenient.
+1. **Run `pnpm android` locally** to rebuild the dev client APK so the home-screen icon label updates from `cc-culinaire-kitchen-mob` to `CulinAIre Kitchen Lite`. Native rebuild step — JS hot reload doesn't pick up `app.config.ts` `name` changes. ~3–5 min.
+2. **Wait for the weekly Vulkan monitor to fire green.** Until upstream llama.rn ships Vulkan in the standard prebuilt JNI, GPU offload is blocked. When the agent reports "Vulkan in prebuilt", bump the pin, set `n_gpu_layers > 0`, test on device with CPU fallback wired in.
+3. **Decide the Full-fork strategy** (separate repo vs. branch vs. build-time flag) before doing Layer 2 of the rename — production-ready bundle id (e.g. `kitchen.culinaire.lite`) needs to align with whatever the Full fork uses.
+4. **Speculative decoding for v3** — parked, gated on user feedback about decode speed (~4 tok/s today → 8–12 tok/s with a 1B Gemma draft model, costs ~600–800 MB extra download). Wait for users to complain.
+5. **Backlog:** PR #7 (wiki CRLF parser fix) and PR #8 (CI workflow) still open. Triage when convenient.
 
 ## Open questions / blockers
 
 - llama.rn 0.12.0-rc.5 pin — Vulkan backend confirmed NOT in any published prebuilt JNI through rc.9 (verified via `find -iname '*vulkan*'` + binary `strings` probe + release-notes scan). Source-build path requires fixing the Python 3.14 / CMake 3.22 issue. Parked until upstream ships or speculative decoding becomes the priority.
-- The cached `LlamaContext` is module-level in `inferenceService.ts`. Settings path-override UI (future) must call `releaseCachedContext()` AND `deleteSavedKV()`.
+- The cached `LlamaContext` is module-level in `inferenceService.ts`. Future settings path-override UI must call `releaseCachedContext()` AND `deleteSavedKV()`.
 - Latent: duplicate-row race in `modelDownloadService.start()` (concurrent calls).
 - `apiClient.post` doesn't thread an `AbortSignal`, so the 3s RAG timeout drops the response but doesn't cancel the fetch.
 - KV-state files are bounded to ONE per launch now (orphan prune), but per-conversation KV state is out of scope this milestone.
@@ -50,5 +52,5 @@ Nothing blocked. Branch state clean. **Vulkan GPU offload investigated and parke
 - [[server-managed-prompts]] — the cache-with-fallback pattern (now also the hash source for KV invalidation)
 - [[privacy-invariant]] — kv-state files added to the audit list
 - [[model-quantization-must-be-mainline]] — why Q4_0 + mainline llama.cpp
-- `docs/specs/kv-prefix-cache-via-parallel-state.md` — the spec we just executed against
+- `docs/specs/kv-prefix-cache-via-parallel-state.md` — the spec we executed against for PR #12
 - `wiki/log.md` — append-only history

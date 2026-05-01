@@ -4,6 +4,34 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-01 (late afternoon) — Lite branding + post-auth flash fix (PR #14 squash-merge `f143b49`) and streaming-bubble verb rotation (PR #13 squash-merge `190bc64`)
+
+Two visual / UX polish PRs landed back-to-back this afternoon.
+
+### PR #13 — streaming-bubble verb rotation (`190bc64`)
+
+Pre-token wait on cold-prefill turns is ~30–80s on the Moto G86 Power. The streaming bubble previously showed a static "Antoine is …" subtitle then went silent until tokens landed — easy to read as stuck. New `src/constants/culinaryVerbs.ts` lists 84 culinary verbs in `-ing` form (sentence case, kitchen-grounded, Caveat-script-free since that font is reserved for "Kitchen"). Inline `useRotatingCulinaryVerb` hook in `ChatList` rotates verbs every 2.2s during the pre-token streaming wait, never repeating back-to-back. Hook is inert when not waiting. 5 unit tests lock in list invariants (count ≥ 78, no duplicates, all -ing form, sentence case, length-bounded). Verified on device — verbs visibly cycle during the ~35s warm-boot turn 1.
+
+### PR #14 — Lite branding + post-auth flash fix (`f143b49`)
+
+Differentiates this build from the future Full fork. Two related changes that surfaced together:
+
+1. **Lite branding.** `app.config.ts` `name` → `CulinAIre Kitchen Lite` (flows into `strings.xml` `app_name` on prebuild). New `src/components/ui/LiteBadge.tsx` — small uppercase "LITE" pill, copper hairline outline + copper Inter SemiBold, letter-spaced, scales against the parent mark. Used in both `Wordmark` (typographic mark) and `BrandGlyph` (PNG lockup). On `BrandGlyph`, auto-suppressed for tiny compact icons (chat header 28px, carousel paginators 36px) via the `withLiteBadge ?? (!compact && size >= 80)` heuristic. Accessibility label flips from "CulinAIre Kitchen" to "CulinAIre Kitchen Lite" when the badge is shown so screen-reader users still get variant info.
+
+2. **Post-auth flash fix** (drive-by, surfaced while verifying #1). `app/(auth)/login.tsx` was hard-coded to `router.replace('/(onboarding)')` after auth — even when the model was already on disk. Returning users saw a one-render-cycle flash of the onboarding screen before bouncing to chat. Fixed in two layers: login.tsx reads `useModelStore.getState().isActive` synchronously and routes directly to `/(tabs)/chat` when true; `RouteGuard` in `app/_layout.tsx` subscribes to `isActive` as a backstop that bounces from `(onboarding)` → `(tabs)/chat` if the value flips true after the user landed there (covers the rare race where `hydratePrefs` hasn't completed at `onAuthed` time). Plus a `[login] onAuthed → isActive=… target=…` breadcrumb log in the same shape as the existing `[boot]` / `[modelStore]` / `[kvSession]` lines.
+
+Tests: 2 new BrandGlyph tests (badge omitted on tiny compact icons; badge shown by default on hero-size lockup). Wordmark + BrandGlyph snapshots refreshed. 151 tests / 25 suites total.
+
+### Branch protection on main
+
+Applied via `gh api PUT repos/.../branches/main/protection` — `enforce_admins=true`, `required_linear_history=true`, `allow_force_pushes=false`, `allow_deletions=false`. `required_pull_request_reviews=null` so the "small docs commits to main directly" pattern from CLAUDE.md still works. Status checks deferred until PR #8 (CI workflow) lands.
+
+### What's next
+
+Run `pnpm android` locally to rebuild the dev client APK so the home-screen icon label updates from `cc-culinaire-kitchen-mob` to `CulinAIre Kitchen Lite`. JS hot reload doesn't pick up `app.config.ts` `name` changes — that's a native-strings.xml regeneration. Otherwise, the in-flight Next-Action #1 stays at "wait for the weekly Vulkan monitor to fire green".
+
+---
+
 ## 2026-05-01 (afternoon) — Vulkan GPU offload investigated, parked
 
 Quick post-PR-12 follow-up. After bagging the saveSession win, investigated the next-action #1 on the in-flight list: Vulkan GPU offload retry on Q4_0.
