@@ -4,6 +4,30 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-01 (mid-day) — KV-state persistence shipped (PR #12 squash-merge `1e90499`)
+
+Full-day session focused on the `saveSession`/`loadSession` spec from yesterday's plan. Merged.
+
+1. **`kvSessionService` shipped.** New `src/services/kvSessionService.ts` saves the system-prompt slice of llama.cpp's KV cache after the first turn of each JS lifetime and restores it via `loadSession()` on next launch. Five independent invalidation triggers — prompt hash, llama.rn version, runtime fingerprint, corrupt-file fallback, `tokens_loaded` mismatch. SHA-256 hashing via newly added `expo-crypto`.
+
+2. **Orphan-prune helper.** Device verification surfaced that file paths keyed by hash prefix would leak ~10–13 MB to disk per system-prompt edit. Added a follow-up that runs after each save, lists `kv-state/`, and deletes any files whose prefix doesn't match the current one. Best-effort, runs only AFTER the new file is on disk.
+
+3. **inferenceService refactor (small).** Lifted `cachedContext` and `ensureContext` from `useAntoine.ts` so the boot effect and chat hook share one cached context. Exported `INFERENCE_RUNTIME` (single source of truth for `n_ctx`/`n_batch`/`cache_type_*`/`n_threads`) and `LLAMA_RN_VERSION` (read at runtime from `llama.rn/package.json` so the sidecar version field is authoritative and never drifts).
+
+4. **Boot effect.** New useEffect in `app/_layout.tsx` after `isPrefsHydrated && isActive`: pre-warms `ensureContext()` + restores saved KV via `loadSystemPromptKV(ctx, await getActivePrompt())`. All best-effort. Also fixed a pre-existing tsc error: `useSegments()` cast to `string[]` for the verify-email path's `segments[1]` access under `noUncheckedIndexedAccess`.
+
+5. **End-to-end device verification on Moto G86 Power.** 5 scenarios, all green. Cross-version sweep tracked the saved-token slice exactly as system prompt grew + shrank: v6 (395 tok / 44.7s cold prefill) → v7 (434) → v8 (475) → v9 (329, after a 17.5s cold-prefill win from trimming). Warm-boot turn 1 cut by 9.3s (loaded slice skipped). Turn 2 multi-turn still hits 1.5–2s prefill via PR #11's RAG cache + this PR's KV state cleanly composing. Orphan prune verified: disk dropped 23.9 MB → 13.6 MB → 11.0 MB across two prune cycles.
+
+6. **Tests.** 16 unit tests for `kvSessionService` (all five invalidation paths + save round-trip + dir-creation-on-missing + disk-full graceful + zero-token tokenize + prune behaviour + session flag). 3 integration tests in `useAntoine.streaming.test.tsx` (turn 1 fires save, turn 2 doesn't, warm-boot pre-set flag skips). 144 tests / 24 suites green pre-push.
+
+7. **Wiki updates.** [privacy-invariant](concepts/privacy-invariant.md) — `files/kv-state/*` added to the on-device audit list. [llama-rn-inference-params](decisions/llama-rn-inference-params.md) — new "KV session persistence" subsection covering when save/load fires, the five invalidation triggers, and the privacy boundary.
+
+8. **Mid-session diagnostics.** Hit Windows Defender file-lock during `pnpm add expo-crypto` (resolved by adding project dir to Defender exclusions). Hit gradle wrapper "JAVA_HOME not set" (resolved by exporting `JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'`). Hit `Cannot find native module 'ExpoCrypto'` on first device launch (resolved by rebuilding dev client APK to bundle the new native module).
+
+**Status:** `main` is at `1e90499`. Next-action #1 is the Vulkan GPU offload retry on Q4_0 — ~30 min to confirm whether the prebuilt JNI ships the backend; if yes, ship behind a feature flag with CPU fallback. Speculative decoding parked for v3 based on real user feedback.
+
+---
+
 ## 2026-05-01 (AM) — Inference tuning branch landed on main (PR #11 squash-merge `5be7079`)
 
 Short session focused on closing out yesterday's inference-tuning work.
