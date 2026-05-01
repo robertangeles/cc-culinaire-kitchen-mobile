@@ -1,5 +1,6 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet } from 'react-native';
 
 import { fonts, palette, theme } from '@/constants/theme';
 
@@ -18,18 +19,14 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontFamily: fonts.uiBold, fontSize: 20 }}>•</Text>
-          ),
+          tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontFamily: fonts.uiBold, fontSize: 20 }}>·</Text>
-          ),
+          tabBarIcon: ({ color }) => <Feather name="settings" size={22} color={color} />,
         }}
       />
     </Tabs>
