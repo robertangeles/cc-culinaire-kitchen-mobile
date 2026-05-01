@@ -80,8 +80,20 @@ export const INFERENCE_RUNTIME = {
   n_ctx: 2048,
   n_batch: 256,
   n_threads: 4,
-  cache_type_k: 'q4_0',
-  cache_type_v: 'q4_0',
+  // Bumped from q4_0 → q8_0 on 2026-05-01 to match off-grid + LM Studio's
+  // KV cache precision for vision turns. Image-embedding tokens flow
+  // through KV at the same quantisation; q4_0 was lossy enough that
+  // Antoine hallucinated content (described "tasting lab equipment"
+  // when shown figurines on a desk). Off-grid uses q8_0 with implicit
+  // flash-attn 'auto'; LM Studio defaults to f16/q8_0. ~+18 MiB at
+  // n_ctx=2048 — earlier OOM at q8_0 came from STACKING with explicit
+  // flash_attn_type='auto'; with that param removed (today's default)
+  // q8_0 alone should fit. Revert to q4_0 if device LMK fires.
+  // Bumping the runtime fingerprint here also invalidates any saved
+  // KV-state sidecars from the q4_0 era — the orphan-prune helper
+  // sweeps them on the next save.
+  cache_type_k: 'q8_0',
+  cache_type_v: 'q8_0',
 } as const;
 
 /**

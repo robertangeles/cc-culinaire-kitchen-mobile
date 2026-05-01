@@ -47,3 +47,6 @@ app-example
 .claude/
 wiki/.graph.json
 
+# diagnostic captures (logcat, screencaps)
+.diagnostic/
+

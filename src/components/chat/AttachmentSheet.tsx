@@ -5,6 +5,7 @@ import {
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
 import * as DocumentPicker from 'expo-document-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { forwardRef, useCallback, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -32,6 +33,41 @@ function renderBackdrop(props: BottomSheetBackdropProps) {
   return <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />;
 }
 
+/**
+ * Resize a freshly-picked image to ≤1024 px on the longer edge and
+ * re-encode at JPEG q=0.8 before passing it to inference. Mirrors the
+ * preprocessing `react-native-image-picker`'s `maxWidth: 1024,
+ * maxHeight: 1024, quality: 0.8` options do automatically — except
+ * `expo-image-picker` doesn't expose those, so we do it ourselves
+ * via `expo-image-manipulator` after the picker resolves.
+ *
+ * Why: the mmproj projector (Gemma 3n vision encoder) operates at a
+ * fixed input grid (224 / 336 / 448 / 768 px). Sending a full-res
+ * 4032×3024 phone photo forces a dramatic in-encoder downsize that
+ * the BF16 mmproj + Q4_0 main-weights stack handles poorly — the
+ * perceptual signal degrades, and the food-biased persona prompt's
+ * text-priors dominate the output. LM Studio (with GPU + auto-
+ * preprocessing) and off-grid-mobile-ai (with this exact resize) both
+ * produce accurate descriptions on the same model file.
+ *
+ * Best-effort: any failure falls through with the original URI and
+ * a console.warn — worse-than-now behavior is impossible since today's
+ * baseline is the un-resized URI anyway.
+ */
+async function resizeForVision(uri: string): Promise<string> {
+  try {
+    const result = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1024 } }], {
+      compress: 0.8,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    console.info(`[attachment] resized image ${uri} → ${result.uri}`);
+    return result.uri;
+  } catch (e) {
+    console.warn('[attachment] resizeForVision failed, falling through with original:', e);
+    return uri;
+  }
+}
+
 export const AttachmentSheet = forwardRef<BottomSheetModal, AttachmentSheetProps>(
   function AttachmentSheet({ onPicked, requestDismiss }, ref) {
     const snapPoints = useMemo(() => ['40%'], []);
@@ -43,13 +79,19 @@ export const AttachmentSheet = forwardRef<BottomSheetModal, AttachmentSheetProps
       // can't intercept the "select photo" tap when the user returns.
       requestDismiss?.();
       const r = await ImagePicker.launchCameraAsync({ allowsEditing: false, quality: 0.85 });
-      if (!r.canceled && r.assets[0]) onPicked({ type: 'image', uri: r.assets[0].uri });
+      if (!r.canceled && r.assets[0]) {
+        const resized = await resizeForVision(r.assets[0].uri);
+        onPicked({ type: 'image', uri: resized });
+      }
     }, [onPicked, requestDismiss]);
 
     const onLibrary = useCallback(async () => {
       requestDismiss?.();
       const r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: false, quality: 0.85 });
-      if (!r.canceled && r.assets[0]) onPicked({ type: 'image', uri: r.assets[0].uri });
+      if (!r.canceled && r.assets[0]) {
+        const resized = await resizeForVision(r.assets[0].uri);
+        onPicked({ type: 'image', uri: resized });
+      }
     }, [onPicked, requestDismiss]);
 
     const onFiles = useCallback(async () => {

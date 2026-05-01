@@ -33,13 +33,34 @@ const IMAGE_ONLY_DEFAULT_TEXT = "Take a look at this. What's your read?";
 
 /**
  * Appended to the active system prompt whenever the current send carries
- * an image. Reframes Antoine's response to be image-aware regardless of
- * what (if anything) the user typed alongside the photo. Kept short to
- * preserve token budget AND deliberately avoids any "first… then…"
- * sequencing that Gemma 3n reads as a chain-of-thought trigger — empirically
- * any imperative-stepwise phrasing here makes the model emit a
- * `<|channel|>thought` block into the user-visible output, even with
- * `chat_template_kwargs.enable_thinking = ''` set on the completion call.
+ * an image. Reframes the model to engage the vision pathway hard enough
+ * to override the persona's text-priors.
+ *
+ * History (2026-05-01):
+ * - First attempt with a "Look at it first — describe what you see plainly,
+ *   then offer specific guidance" phrasing emitted a `<|channel|>thought`
+ *   block; rephrased to drop the "first… then…" sequencing.
+ * - The second phrasing below (`An image is attached. Use it as the
+ *   primary context for your reply.`) was the ONLY config in this
+ *   session that produced empirically accurate vision output (correctly
+ *   identified figurines as "diorama, mushroom, acorn, gold leaf").
+ * - Removing the addendum entirely (to match off-grid + LM Studio's
+ *   setups) reverted the model to inventing fictional food content
+ *   ("tasting menu with sea urchin", "roasted brunoise"). Image
+ *   resizing to 1024 px did NOT compensate.
+ *
+ * Why off-grid doesn't need this: their Snapdragon devices have HTP/GPU
+ * offload via newer llama.rn with `kv_unified: true` — a runtime config
+ * we can't replicate on Mediatek + llama.rn 0.12.0-rc.5. On OUR stack
+ * (CPU-only, Q4_0 weights, BF16 mmproj), the addendum is the load-
+ * bearing piece that makes vision win over the food-biased persona.
+ *
+ * Trade-off accepted: on out-of-scope images, Antoine describes
+ * rather than refuses cleanly per the persona's "Decline in one
+ * sentence" rule. Strictly better than the alternative (food
+ * confabulation). LM-Studio-style persona-pure refusals are
+ * unavailable until we get GPU offload via Vulkan in the prebuilt
+ * JNI (parked, weekly monitor running).
  */
 const SYSTEM_PROMPT_IMAGE_ADDENDUM =
   '\n\nAn image is attached. Use it as the primary context for your reply.';
@@ -89,10 +110,14 @@ export function useAntoine() {
       // Image-only sends arrive here with content === '' (the attachment
       // sheet's onAttachmentPicked fires send('', uri) with no chance to
       // type). Inject a chef-voiced default so the user-message bubble
-      // is parseable, RAG has a query, and Antoine has a real prompt.
+      // is parseable and Antoine has a real prompt; track image-only
+      // state so the RAG path can skip itself (the generic default text
+      // would otherwise pull culinary chunks that bias the model away
+      // from grounding in the image — vision provides the context, RAG
+      // chunks would compete).
       const hasImage = !!imageUri;
-      const effectiveContent =
-        content.trim().length === 0 && hasImage ? IMAGE_ONLY_DEFAULT_TEXT : content;
+      const isImageOnlySend = content.trim().length === 0 && hasImage;
+      const effectiveContent = isImageOnlySend ? IMAGE_ONLY_DEFAULT_TEXT : content;
       const userMessage = makeMessage(conversationId, 'user', effectiveContent, imageUri);
       await addMessage(conversationId, userMessage);
 
@@ -144,13 +169,26 @@ export function useAntoine() {
         const cachedChunks =
           useConversationStore.getState().ragChunksByConversation[conversationId];
         const isFirstRagFetch = cachedChunks === undefined;
-        // Defensive guard: ragService.retrieve throws on an empty query
-        // (it's a programmer-error assertion). The image-only injection
-        // above means `effectiveContent` should always be non-empty by
-        // the time we reach here, but keep the skip path so a future
-        // call site that fires send('', undefined) doesn't crash.
+        // Skip RAG entirely for any image-attached send. Empirically,
+        // even a single tangentially-related RAG chunk biases the
+        // model toward fabricating food content for non-food images
+        // (e.g. q8_0 KV + addendum + 2 RAG chunks → "cast iron skillet,
+        // spent wood and ash" on a figurines photo; same config with
+        // 0 RAG chunks → accurate "diorama, mushroom, acorn, gold leaf").
+        //
+        // Architectural rule: when an image is in the turn, vision IS
+        // the context. RAG would compete with the vision pathway, and
+        // the user's text alone (whether the auto-injected chef-voiced
+        // default OR a short typed query like "what is this?") is too
+        // generic to reliably retrieve chunks that match what's
+        // actually in the photo. Future enhancement: re-query RAG
+        // after the model identifies the image content, then layer
+        // those chunks into a follow-up turn. Out of scope here.
+        //
+        // Also keep the empty-content defensive guard: ragService.retrieve
+        // throws on an empty query (programmer-error assertion).
         const trimmedContent = effectiveContent.trim();
-        const skipRag = trimmedContent.length === 0;
+        const skipRag = trimmedContent.length === 0 || hasImage;
         console.info(
           `[useAntoine] stage=retrieving — fetching prompt${
             skipRag ? ' (RAG skipped — empty query, defensive)' : ''
@@ -191,9 +229,10 @@ export function useAntoine() {
         // history. The model is instructed (via the system prompt or
         // training) to cite [n] references when the RAG block is present.
         //
-        // When this turn has an image attached, append the photo
-        // addendum to the system message — frames Antoine to look at
-        // the photo first and ground his guidance in what he observes.
+        // When the turn carries an image, append the photo-engagement
+        // addendum so the vision pathway dominates the persona's
+        // text-priors. See SYSTEM_PROMPT_IMAGE_ADDENDUM for the
+        // empirical rationale.
         const ragBlock = formatRagContext(ragChunks);
         const systemContent = hasImage
           ? `${systemPrompt}${SYSTEM_PROMPT_IMAGE_ADDENDUM}`
@@ -211,12 +250,26 @@ export function useAntoine() {
           );
         }
 
-        // For each historical user message that carries an imageUri,
-        // build OAI-style content parts so the model receives the
-        // image bytes. Plain string content stays for text-only
-        // messages and assistant replies.
-        const history: InferenceMessage[] = [...messages, userMessage].map((m) => {
-          const isUserWithImage = m.role === 'user' && !!m.imageUri && visionAvailable;
+        // Only the CURRENT turn's user message gets an image_url content
+        // part. Historical user messages that originally carried an
+        // imageUri become text-only — the model can no longer
+        // re-perceive prior images, so it can't conflate them with the
+        // current one. The assistant's prior reply text serves as the
+        // "memory" of what was discussed in earlier image turns.
+        //
+        // Empirically observed regression without this constraint: turn 1
+        // shows a diorama, Antoine describes it accurately. Turn 2 shows
+        // an onion, Antoine claims it's "the same subject as the previous
+        // image — a small, raw onion" — confusing the prior diorama
+        // with the new onion because both image_url parts were in the
+        // prefilled context. Stripping prior image_url parts fixes the
+        // attribution.
+        const allMessages = [...messages, userMessage];
+        const lastIdx = allMessages.length - 1;
+        const history: InferenceMessage[] = allMessages.map((m, idx) => {
+          const isCurrentTurn = idx === lastIdx;
+          const isUserWithImage =
+            m.role === 'user' && !!m.imageUri && visionAvailable && isCurrentTurn;
           if (isUserWithImage) {
             const fileUri = m.imageUri!.startsWith('file://')
               ? m.imageUri!
@@ -255,6 +308,35 @@ export function useAntoine() {
             hasImage && visionAvailable ? ' [vision]' : ''
           }`,
         );
+
+        // Vision turn diagnostic — dump the rendered chat-template prompt
+        // so we can verify Gemma 3n's image soft-token markers actually
+        // appear in the prefilled string. Without those markers the
+        // vision encoder's output won't bind to the right token
+        // positions and the model sees image bytes as noise. Cheap
+        // (~few ms), high-signal. Remove once multimodal accuracy is
+        // verified end-to-end.
+        if (hasImage && visionAvailable) {
+          try {
+            const formatted = await ctx.native.getFormattedChat(
+              inferenceMessages as Parameters<typeof ctx.native.getFormattedChat>[0],
+            );
+            const promptStr =
+              typeof formatted === 'object' && formatted && 'prompt' in formatted
+                ? (formatted.prompt as string)
+                : '';
+            const hasImageMarker =
+              /<image_soft_token>|<start_of_image>|<__media__>|<image>|image_url/i.test(promptStr);
+            console.info(
+              `[useAntoine] vision-prompt diagnostic: hasImageMarker=${hasImageMarker} length=${promptStr.length}`,
+            );
+            console.info(`[useAntoine] vision-prompt head: ${promptStr.slice(0, 400)}`);
+            console.info(`[useAntoine] vision-prompt tail: ${promptStr.slice(-400)}`);
+          } catch (e) {
+            console.warn('[useAntoine] getFormattedChat diagnostic failed:', e);
+          }
+        }
+
         const result = await completion(ctx, { messages: inferenceMessages }, (token) =>
           appendStreamingToken(token),
         );

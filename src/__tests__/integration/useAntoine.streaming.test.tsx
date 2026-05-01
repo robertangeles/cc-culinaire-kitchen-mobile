@@ -330,22 +330,26 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     expect(userInsert?.content).toBe("Take a look at this. What's your read?");
     expect(userInsert?.imageUri).toBe('file:///mock/photo.jpg');
 
-    // RAG retrieve is called with the injected text (not the empty caller
-    // content) — keeps the prefix-cache discipline consistent.
-    expect(retrieveMock).toHaveBeenCalledWith(
-      "Take a look at this. What's your read?",
-      expect.objectContaining({ limit: 2 }),
-    );
+    // RAG retrieve is SKIPPED for any image-attached send. Empirically,
+    // even a single tangentially-related RAG chunk biases the model
+    // toward fabricating food content on non-food images (the chunks
+    // pulled by the generic chef-voiced default compete with the vision
+    // pathway). Vision IS the context for image turns. See useAntoine.ts.
+    expect(retrieveMock).not.toHaveBeenCalled();
 
-    // System message includes the photo-addendum so Antoine reframes
-    // around the image rather than the chitchat-default text.
+    // System message includes the photo-engagement addendum on this
+    // device stack (Mediatek + llama.rn 0.12.0-rc.5 + BF16 mmproj +
+    // CPU-only). Empirically, removing it makes the model invent food
+    // content from the persona's text-priors instead of grounding in
+    // the image. See SYSTEM_PROMPT_IMAGE_ADDENDUM in useAntoine.ts.
     expect(llamaCompletion).toHaveBeenCalled();
     const messages = (
       llamaCompletion.mock.calls[0]?.[1] as { messages: { role: string; content: string }[] }
     ).messages;
     const systemMsg = messages[0];
     expect(systemMsg?.role).toBe('system');
-    expect(systemMsg?.content).toMatch(/photo|image/i);
+    expect(systemMsg?.content).toMatch(/CACHED_SERVER_PROMPT/);
+    expect(systemMsg?.content).toMatch(/image is attached/i);
 
     // No error fallback got persisted — the send completed cleanly.
     const errorFallback = insertCalls.find(
