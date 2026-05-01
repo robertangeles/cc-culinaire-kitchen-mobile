@@ -24,8 +24,10 @@ import {
   toggleNativeLog,
   type TokenData,
 } from 'llama.rn';
+import llamaRnPkg from 'llama.rn/package.json';
 
 import { ANTOINE_SYSTEM_PROMPT } from '@/constants/antoine';
+import { getMainModelPath } from '@/services/modelLocator';
 import type { InferenceMessage, InferenceResult } from '@/types/inference';
 
 // Surface llama.cpp's native stderr (model load failures, gguf format
@@ -54,6 +56,31 @@ export interface LlamaContext {
   modelPath: string;
   native: NativeLlamaContext;
 }
+
+/**
+ * Single source of truth for the runtime parameters passed to
+ * `initLlama`. Used inside this module AND read by `kvSessionService`
+ * to detect "the runtime fingerprint changed since we saved this KV
+ * state" — sidecar mismatch invalidates the saved state.
+ *
+ * Bump any value here only after empirical device verification on the
+ * Moto G86 Power. See wiki/decisions/llama-rn-inference-params.md for
+ * the reasoning behind each value.
+ */
+export const INFERENCE_RUNTIME = {
+  n_ctx: 2048,
+  n_batch: 256,
+  n_threads: 4,
+  cache_type_k: 'q4_0',
+  cache_type_v: 'q4_0',
+} as const;
+
+/**
+ * llama.rn's binary KV-cache format may change across releases. The
+ * sidecar JSON next to each saved KV blob records the version that
+ * wrote it; on load, a mismatch invalidates and we re-prefill once.
+ */
+export const LLAMA_RN_VERSION: string = llamaRnPkg.version;
 
 export interface InitOptions {
   /** Absolute path to the main GGUF file on device. */
@@ -116,14 +143,14 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // The earlier 1536 ceiling was forced by Q4_K_M's CPU_REPACK buffer
     // colliding with the Android low-memory killer. With both weights
     // and KV at Q4_0 the device has headroom — verified empirically.
-    n_ctx: options.contextSize ?? 2048,
+    n_ctx: options.contextSize ?? INFERENCE_RUNTIME.n_ctx,
     // 256 batch size. Tested 512 on 2026-04-30 — same prefill timing on
     // the Dimensity 7300 but +308 MiB compute buffer for nothing. Prefill
     // is matmul-bound on the A78 cores, not batch-overhead-bound, so
     // bigger batches don't help.
-    n_batch: options.batchSize ?? 256,
-    n_ubatch: options.batchSize ?? 256,
-    n_threads: options.threadCount ?? 4,
+    n_batch: options.batchSize ?? INFERENCE_RUNTIME.n_batch,
+    n_ubatch: options.batchSize ?? INFERENCE_RUNTIME.n_batch,
+    n_threads: options.threadCount ?? INFERENCE_RUNTIME.n_threads,
     n_gpu_layers: 0,
     // No-op for Q4_0 weights (Q4_0 has no repack buffer to skip), but
     // kept as a defensive flag in case llama.cpp adds extra buffer types
@@ -138,8 +165,8 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // — log showed `Flash Attention was auto, set to enabled` with Q4_0).
     // Off-grid's claim that Q4_0+flash-attn isn't supported was wrong
     // for our specific binary.
-    cache_type_k: 'q4_0',
-    cache_type_v: 'q4_0',
+    cache_type_k: INFERENCE_RUNTIME.cache_type_k,
+    cache_type_v: INFERENCE_RUNTIME.cache_type_v,
     // Flash-attention is on by default at flash_attn=auto in llama.rn
     // 0.12.0-rc.5; explicit `flash_attn_type: 'auto'` was tested and
     // contributed to the OOM combined with Q8_0 KV. Removed to stay at
@@ -149,6 +176,41 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // added in a later llama.rn release.
   });
   return { id: native.id, modelPath: options.model, native };
+}
+
+/**
+ * Module-level cached context. Loaded lazily by the first caller
+ * (chat send or boot pre-warm) and reused across the JS lifetime.
+ * Multi-second cold load on first use; near-instant after that.
+ *
+ * Both `useAntoine.send()` and the boot effect in `app/_layout.tsx`
+ * call `ensureContext()` so the context is shared. The boot effect
+ * pre-warms in the background while the user is reading the chat tab,
+ * so the first send doesn't pay the cold load.
+ */
+let cachedContext: LlamaContext | null = null;
+
+export async function ensureContext(): Promise<LlamaContext> {
+  if (cachedContext) return cachedContext;
+  const modelPath = await getMainModelPath();
+  cachedContext = await initLlama({ model: modelPath });
+  return cachedContext;
+}
+
+export function getCachedContext(): LlamaContext | null {
+  return cachedContext;
+}
+
+/**
+ * Drops the cached context and releases the native llama.cpp resources.
+ * Future settings UI (path-override) calls this when the user changes
+ * the model directory; that caller is also responsible for clearing
+ * any saved KV-state files via `kvSessionService.deleteSavedKV()` —
+ * KV state saved against a now-released context is unsafe to restore.
+ */
+export async function releaseCachedContext(): Promise<void> {
+  cachedContext = null;
+  await nativeReleaseAll();
 }
 
 export async function completion(

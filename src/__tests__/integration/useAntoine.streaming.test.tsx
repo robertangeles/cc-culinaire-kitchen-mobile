@@ -46,11 +46,35 @@ jest.mock('@/services/ragService', () => {
   };
 });
 
+// Self-contained mock for kvSessionService. Holds the `kvHandled` flag
+// inside the factory closure so tests can call markKvHandled / reset
+// without touching real expo-crypto + filesystem modules.
+jest.mock('@/services/kvSessionService', () => {
+  let flag = false;
+  return {
+    saveSystemPromptKV: jest.fn(async () => undefined),
+    loadSystemPromptKV: jest.fn(async () => false),
+    deleteSavedKV: jest.fn(async () => undefined),
+    markKvHandled: jest.fn(() => {
+      flag = true;
+    }),
+    wasKvHandledThisSession: jest.fn(() => flag),
+    __resetKvSessionFlagForTests: jest.fn(() => {
+      flag = false;
+    }),
+  };
+});
+
 import { act, renderHook } from '@testing-library/react-native';
 
 import * as messageQueries from '@/db/queries/messages';
 import { useAntoine } from '@/hooks/useAntoine';
 import { __forceError } from '@/services/inferenceService';
+import {
+  __resetKvSessionFlagForTests,
+  markKvHandled,
+  saveSystemPromptKV,
+} from '@/services/kvSessionService';
 import { retrieve } from '@/services/ragService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
@@ -59,6 +83,7 @@ import type { AuthUser } from '@/types/auth';
 /* eslint-enable import/first */
 
 const retrieveMock = retrieve as jest.MockedFunction<typeof retrieve>;
+const saveKvMock = saveSystemPromptKV as jest.MockedFunction<typeof saveSystemPromptKV>;
 
 const fakeUser: AuthUser = {
   userId: 42,
@@ -80,6 +105,7 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     jest.clearAllMocks();
     __forceError.value = false;
     retrieveMock.mockResolvedValue([]);
+    __resetKvSessionFlagForTests();
     useAuthStore.setState({
       user: fakeUser,
       token: 'tok',
@@ -373,6 +399,53 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     expect(turn2Args[1]?.content).toBe(turn1Args[1]?.content);
 
     llamaCompletion.mockRestore();
+  });
+
+  // -----------------------------------------------------------------
+  // KV-state save (system-prompt KV cache persistence across launches)
+  // -----------------------------------------------------------------
+
+  it('fires saveSystemPromptKV exactly once after the first successful completion', async () => {
+    const { result } = renderHook(() => useAntoine());
+
+    await act(async () => {
+      await result.current.send('hello');
+    });
+
+    expect(saveKvMock).toHaveBeenCalledTimes(1);
+    // First arg is the LlamaContext (we only assert it's defined),
+    // second arg is the system prompt — the cached server prompt.
+    const [, prompt] = saveKvMock.mock.calls[0] ?? [];
+    expect(prompt).toBe('CACHED_SERVER_PROMPT');
+  });
+
+  it('does NOT call saveSystemPromptKV again on the second turn (flag latches for the session)', async () => {
+    const { result } = renderHook(() => useAntoine());
+
+    await act(async () => {
+      await result.current.send('first turn');
+    });
+    await act(async () => {
+      await result.current.send('second turn');
+    });
+
+    // saveSystemPromptKV must fire on turn 1 only, regardless of how
+    // many subsequent sends happen during the same JS lifetime.
+    expect(saveKvMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips saveSystemPromptKV on the first send if the kvHandled flag is already set (warm-boot scenario)', async () => {
+    // Simulate the boot effect having already loaded a saved KV state
+    // and called markKvHandled() before the user opened the chat.
+    markKvHandled();
+
+    const { result } = renderHook(() => useAntoine());
+    await act(async () => {
+      await result.current.send('hello');
+    });
+
+    // No save — the saved KV state on disk is already current.
+    expect(saveKvMock).not.toHaveBeenCalled();
   });
 
   it('does NOT cache an empty RAG result, so the second turn retries retrieval', async () => {
