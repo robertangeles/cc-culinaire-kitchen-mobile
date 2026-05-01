@@ -51,6 +51,13 @@ function RouteGuard() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isHydrated = useAuthStore((s) => s.isHydrated);
+  // Watch isActive so that when hydratePrefs() flips it true (after
+  // verifyModelFiles confirms the GGUFs are on disk), users who landed
+  // on (onboarding) before the check completed get bounced to chat.
+  // Login routes unconditionally to (onboarding); without this guard a
+  // returning user with the model already downloaded would see the
+  // "Get Antoine · 5.9 GB" CTA every launch.
+  const isModelActive = useModelStore((s) => s.isActive);
 
   useEffect(() => {
     if (!isHydrated) return;
@@ -75,8 +82,17 @@ function RouteGuard() {
     // sense when logged out or unverified).
     if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
       router.replace('/(tabs)/chat');
+      return;
     }
-  }, [user, isHydrated, segments, router]);
+
+    // And kick out of (onboarding) once the model is on disk — covers the
+    // post-auth race where login routes here before hydratePrefs flips
+    // isActive. If the model is genuinely missing, isActive stays false
+    // and the user remains on (onboarding) to download.
+    if (segments[0] === '(onboarding)' && isModelActive) {
+      router.replace('/(tabs)/chat');
+    }
+  }, [user, isHydrated, segments, router, isModelActive]);
 
   return null;
 }
