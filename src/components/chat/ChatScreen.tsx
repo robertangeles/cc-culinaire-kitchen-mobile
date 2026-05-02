@@ -26,7 +26,6 @@ import {
   SignOutIcon,
   TrashIcon,
 } from './KebabMenu';
-import { PressToTalk } from './PressToTalk';
 
 export function ChatScreen() {
   const router = useRouter();
@@ -80,18 +79,9 @@ export function ChatScreen() {
   }));
 
   const [kebabOpen, setKebabOpen] = useState(false);
-  const [recording, setRecording] = useState(false);
   const historyRef = useRef<BottomSheetModal>(null);
 
   const onSend = useCallback((text: string) => void send(text), [send]);
-
-  const onMicPress = useCallback(() => {
-    setRecording(true);
-    setTimeout(() => {
-      setRecording(false);
-      void send('Mocked transcript: pretend the user spoke a question here.');
-    }, 1100);
-  }, [send]);
 
   const items: KebabItem[] = [
     {
@@ -149,7 +139,7 @@ export function ChatScreen() {
 
       <ChatList messages={messages} />
 
-      <ChatComposer onSend={onSend} onPressMic={onMicPress} />
+      <ChatComposer onSend={onSend} />
 
       <HistorySheet
         ref={historyRef}
@@ -162,7 +152,6 @@ export function ChatScreen() {
       />
 
       <KebabMenu visible={kebabOpen} onClose={() => setKebabOpen(false)} items={items} />
-      <PressToTalk visible={recording} />
     </Animated.View>
   );
 }

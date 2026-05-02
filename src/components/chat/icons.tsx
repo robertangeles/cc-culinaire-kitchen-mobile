@@ -1,4 +1,4 @@
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { palette } from '@/constants/theme';
 
@@ -9,24 +9,6 @@ const baseProps = {
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
 };
-
-export function MicIcon({ size = 24, color = palette.ink }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect
-        x={9}
-        y={2}
-        width={6}
-        height={13}
-        rx={3}
-        stroke={color}
-        strokeWidth={2}
-        {...baseProps}
-      />
-      <Path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8" stroke={color} strokeWidth={2} {...baseProps} />
-    </Svg>
-  );
-}
 
 export function SendIcon({ size = 24, color = palette.ink }: IconProps) {
   return (

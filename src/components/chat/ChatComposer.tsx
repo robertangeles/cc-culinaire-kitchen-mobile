@@ -3,15 +3,14 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { fonts, palette, radii, spacing, theme } from '@/constants/theme';
 
-import { MicIcon, SendIcon } from './icons';
+import { SendIcon } from './icons';
 
 interface ChatComposerProps {
   onSend: (text: string) => void;
-  onPressMic: () => void;
   disabled?: boolean;
 }
 
-export function ChatComposer({ onSend, onPressMic, disabled = false }: ChatComposerProps) {
+export function ChatComposer({ onSend, disabled = false }: ChatComposerProps) {
   const [text, setText] = useState('');
   const canSend = text.trim().length > 0 && !disabled;
 
@@ -47,17 +46,7 @@ export function ChatComposer({ onSend, onPressMic, disabled = false }: ChatCompo
           >
             <SendIcon size={20} color={palette.textOnCopper} />
           </Pressable>
-        ) : (
-          <Pressable
-            onPress={onPressMic}
-            style={styles.iconBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Hold to talk"
-            hitSlop={6}
-          >
-            <MicIcon size={22} color={palette.inkSoft} />
-          </Pressable>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -83,13 +72,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.s2,
     paddingVertical: spacing.s2,
     minHeight: 52,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   input: {
     flex: 1,
