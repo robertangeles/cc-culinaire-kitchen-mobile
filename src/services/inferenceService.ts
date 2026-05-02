@@ -26,10 +26,8 @@ import {
 } from 'llama.rn';
 import llamaRnPkg from 'llama.rn/package.json';
 
-import * as FileSystem from 'expo-file-system/legacy';
-
 import { ANTOINE_SYSTEM_PROMPT } from '@/constants/antoine';
-import { getMainModelPath, getMmprojPath, toFileUri } from '@/services/modelLocator';
+import { getMainModelPath } from '@/services/modelLocator';
 import type { InferenceMessage, InferenceResult } from '@/types/inference';
 
 // Surface llama.cpp's native stderr (model load failures, gguf format
@@ -57,13 +55,6 @@ export interface LlamaContext {
   id: number;
   modelPath: string;
   native: NativeLlamaContext;
-  /**
-   * True iff `initMultimodal` was called on this context AND succeeded.
-   * Callers passing image attachments should check this and fall back to
-   * text-only when false (otherwise the model receives no image bytes
-   * and hallucinates content). See `useAntoine.send`.
-   */
-  multimodalEnabled: boolean;
 }
 
 /**
@@ -80,18 +71,10 @@ export const INFERENCE_RUNTIME = {
   n_ctx: 2048,
   n_batch: 256,
   n_threads: 4,
-  // Bumped from q4_0 → q8_0 on 2026-05-01 to match off-grid + LM Studio's
-  // KV cache precision for vision turns. Image-embedding tokens flow
-  // through KV at the same quantisation; q4_0 was lossy enough that
-  // Antoine hallucinated content (described "tasting lab equipment"
-  // when shown figurines on a desk). Off-grid uses q8_0 with implicit
-  // flash-attn 'auto'; LM Studio defaults to f16/q8_0. ~+18 MiB at
-  // n_ctx=2048 — earlier OOM at q8_0 came from STACKING with explicit
-  // flash_attn_type='auto'; with that param removed (today's default)
-  // q8_0 alone should fit. Revert to q4_0 if device LMK fires.
-  // Bumping the runtime fingerprint here also invalidates any saved
-  // KV-state sidecars from the q4_0 era — the orphan-prune helper
-  // sweeps them on the next save.
+  // KV cache stored at q8_0 — empirically fits on the Moto G86 Power
+  // alongside the Q4_0 main weights (~+18 MiB at n_ctx=2048 vs q4_0).
+  // Revert to q4_0 if a future device class triggers the Android low-
+  // memory killer at this combined footprint.
   cache_type_k: 'q8_0',
   cache_type_v: 'q8_0',
 } as const;
@@ -106,8 +89,6 @@ export const LLAMA_RN_VERSION: string = llamaRnPkg.version;
 export interface InitOptions {
   /** Absolute path to the main GGUF file on device. */
   model: string;
-  /** Reserved for multimodal — unused this milestone. */
-  mmproj?: string;
   /**
    * KV cache size in tokens. Default 1024 — chosen to fit alongside the
    * Antoine gemma4 model on an 8 GB phone. Empirically, n_ctx=2048 with
@@ -151,38 +132,6 @@ const STOP_TOKEN_SET = new Set<string>(STOP_TOKENS);
  * internal prompt-cache reuses any prefix).
  */
 let timingTurnCounter = 0;
-
-/**
- * Best-effort multimodal initialization. Calls `native.initMultimodal`
- * with the mmproj projector path. Returns false (and logs a warning)
- * on any failure — caller should fall back to text-only inference.
- *
- * Why best-effort: the mmproj file is a separate ~1 GB download; on a
- * fresh install or after a settings reset it may not be on disk yet.
- * The chat path stays usable for text without it.
- */
-async function tryInitMultimodal(native: NativeLlamaContext, mmprojPath: string): Promise<boolean> {
-  try {
-    const fileInfo = await FileSystem.getInfoAsync(toFileUri(mmprojPath));
-    if (!fileInfo.exists) {
-      console.warn(`[inferenceService] mmproj not on disk at ${mmprojPath} — vision disabled`);
-      return false;
-    }
-    const ok = await native.initMultimodal({ path: mmprojPath, use_gpu: false });
-    if (!ok) {
-      console.warn('[inferenceService] initMultimodal returned false — mmproj load failed');
-      return false;
-    }
-    const support = await native.getMultimodalSupport();
-    console.info(
-      `[inferenceService] multimodal initialized — vision=${support.vision} audio=${support.audio}`,
-    );
-    return support.vision;
-  } catch (e) {
-    console.warn('[inferenceService] tryInitMultimodal threw:', e);
-    return false;
-  }
-}
 
 export async function initLlama(options: InitOptions): Promise<LlamaContext> {
   if (__forceError.value) {
@@ -228,12 +177,7 @@ export async function initLlama(options: InitOptions): Promise<LlamaContext> {
     // dropped before the native binding in 0.12.0-rc.5. Param was
     // added in a later llama.rn release.
   });
-  // Wire the mmproj projector for vision input if the caller passed a
-  // path. Best-effort — text-only inference works fine without it.
-  const multimodalEnabled = options.mmproj
-    ? await tryInitMultimodal(native, options.mmproj)
-    : false;
-  return { id: native.id, modelPath: options.model, native, multimodalEnabled };
+  return { id: native.id, modelPath: options.model, native };
 }
 
 /**
@@ -251,10 +195,7 @@ let cachedContext: LlamaContext | null = null;
 export async function ensureContext(): Promise<LlamaContext> {
   if (cachedContext) return cachedContext;
   const modelPath = await getMainModelPath();
-  // Resolve the mmproj path — it may or may not be on disk; tryInitMultimodal
-  // verifies existence and downgrades gracefully to text-only.
-  const mmprojPath = await getMmprojPath().catch(() => undefined);
-  cachedContext = await initLlama({ model: modelPath, mmproj: mmprojPath });
+  cachedContext = await initLlama({ model: modelPath });
   return cachedContext;
 }
 
@@ -285,32 +226,13 @@ export async function completion(
   const result = await ctx.native.completion(
     {
       messages: params.messages,
-      // n_ctx is 1536. n_predict eats from the same budget as input. On
+      // n_ctx is 2048. n_predict eats from the same budget as input. On
       // the first RAG turn (system + 2 chunks + user), input is ~700
       // tokens; n_predict=384 leaves headroom and still produces a
       // 150-200 word answer — plenty for a culinary reply.
       n_predict: 384,
-      // Temperature is intentionally lower than off-grid's 0.7. Lower
-      // temperature suppresses the model's narrative-reflex on perception
-      // turns — the failure mode where the BF16 mmproj → Q4_0 backbone
-      // hands an embedding the model cannot read precisely, and it falls
-      // back to the most plausible-sounding food category and elaborates
-      // confidently (pistachios → "vacuum-packed oyster mushrooms").
-      // Off-grid pairs 0.7 with a Q8_0 mmproj; we ship a BF16 mmproj
-      // because mainline llama-quantize cannot handle this projector's
-      // conv_dw + audio-encoder a.conv1d tensor shapes. Temperature is
-      // the last cheap, prompt-free accuracy lever before we accept the
-      // hardware ceiling on Q4_0/CPU vision.
-      temperature: 0.4,
-      // Sampler aligned with off-grid-mobile-ai's vision-capable setup.
-      // top_p was 0.9, no top_k, no repeat penalty — that combination let
-      // the model lock in early wrong tokens on perception turns ("watch"
-      // → "smartphone screen") and roll forward without revising. Off-grid
-      // ships top_k:40 + top_p:0.95 + penalty_repeat:1.1 for the same
-      // Q4_0/mmproj stack and reads images correctly.
-      top_p: 0.95,
-      top_k: 40,
-      penalty_repeat: 1.1,
+      temperature: 0.7,
+      top_p: 0.9,
       stop: [...STOP_TOKENS],
       // Disable Gemma's <|channel|>thought reasoning block. The kwarg is
       // typed as Record<string, string> and rendered through Jinja —

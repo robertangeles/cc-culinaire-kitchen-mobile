@@ -8,7 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 import { NativeModules } from 'react-native';
 
 import { MODEL, STORAGE_KEYS } from '@/constants/config';
-import { getMainModelPath, getMmprojPath, verifyModelFiles } from '@/services/modelLocator';
+import { getMainModelPath, verifyModelFiles } from '@/services/modelLocator';
 /* eslint-enable import/first */
 
 const getInfoMock = FileSystem.getInfoAsync as jest.MockedFunction<typeof FileSystem.getInfoAsync>;
@@ -38,15 +38,7 @@ describe('modelLocator', () => {
     expect(path).toBe(`/sdcard/Downloads/antoine/${MODEL.files.main.filename}`);
   });
 
-  it('resolves the mmproj path under the same base dir', async () => {
-    (SecureStore.getItemAsync as jest.Mock).mockResolvedValueOnce(null);
-    const path = await getMmprojPath();
-    expect(path).toBe(
-      `/data/user/0/app/files/models/${MODEL.id}/v1/${MODEL.files.mmproj.filename}`,
-    );
-  });
-
-  it('verifyModelFiles returns ok when both files are present', async () => {
+  it('verifyModelFiles returns ok when the main model file is present', async () => {
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
     getInfoMock.mockResolvedValue({ exists: true } as Awaited<
       ReturnType<typeof FileSystem.getInfoAsync>
@@ -55,17 +47,14 @@ describe('modelLocator', () => {
     expect(result).toEqual({ ok: true, missing: [] });
   });
 
-  it('verifyModelFiles reports missing filenames when a file is absent', async () => {
+  it('verifyModelFiles reports the missing filename when the main model is absent', async () => {
     (SecureStore.getItemAsync as jest.Mock).mockResolvedValue(null);
-    getInfoMock.mockImplementation(async (uri: string) => {
-      if (uri.endsWith(MODEL.files.mmproj.filename)) {
-        return { exists: false } as Awaited<ReturnType<typeof FileSystem.getInfoAsync>>;
-      }
-      return { exists: true } as Awaited<ReturnType<typeof FileSystem.getInfoAsync>>;
-    });
+    getInfoMock.mockResolvedValue({ exists: false } as Awaited<
+      ReturnType<typeof FileSystem.getInfoAsync>
+    >);
     const result = await verifyModelFiles();
     expect(result.ok).toBe(false);
-    expect(result.missing).toEqual([MODEL.files.mmproj.filename]);
+    expect(result.missing).toEqual([MODEL.files.main.filename]);
   });
 
   it('throws when neither override nor native module is available', async () => {

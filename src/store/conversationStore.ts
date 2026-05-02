@@ -11,17 +11,15 @@ function rowToMessage(r: {
   conversationId: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  imageUri: string | null;
   createdDttm: Date;
 }): Message {
-  const base: Message = {
+  return {
     id: r.id,
     conversationId: r.conversationId,
     role: r.role,
     content: r.content,
     createdAt: r.createdDttm.getTime(),
   };
-  return r.imageUri ? { ...base, imageUri: r.imageUri } : base;
 }
 
 function rowToConversation(r: {
@@ -177,7 +175,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       conversationId,
       role: message.role,
       content: message.content,
-      imageUri: message.imageUri ?? null,
       createdDttm: new Date(message.createdAt),
     });
     await conversationQueries.touch(conversationId);
@@ -243,7 +240,6 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       conversationId,
       role: 'assistant',
       content: finalText,
-      imageUri: null,
       createdDttm: new Date(message.createdAt),
     });
     await conversationQueries.touch(conversationId);

@@ -64,11 +64,6 @@ export async function getMainModelPath(): Promise<string> {
   return joinPath(base, MODEL.files.main.filename);
 }
 
-export async function getMmprojPath(): Promise<string> {
-  const base = await getBaseDir();
-  return joinPath(base, MODEL.files.mmproj.filename);
-}
-
 export interface VerifyResult {
   ok: boolean;
   missing: string[];
@@ -88,13 +83,9 @@ export function toFileUri(path: string): string {
 }
 
 export async function verifyModelFiles(): Promise<VerifyResult> {
-  const [main, mmproj] = await Promise.all([getMainModelPath(), getMmprojPath()]);
-  const [mainInfo, mmInfo] = await Promise.all([
-    FileSystem.getInfoAsync(toFileUri(main)),
-    FileSystem.getInfoAsync(toFileUri(mmproj)),
-  ]);
+  const main = await getMainModelPath();
+  const mainInfo = await FileSystem.getInfoAsync(toFileUri(main));
   const missing: string[] = [];
   if (!mainInfo.exists) missing.push(MODEL.files.main.filename);
-  if (!mmInfo.exists) missing.push(MODEL.files.mmproj.filename);
   return { ok: missing.length === 0, missing };
 }

@@ -3,21 +3,15 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { fonts, palette, radii, spacing, theme } from '@/constants/theme';
 
-import { MicIcon, PlusIcon, SendIcon } from './icons';
+import { MicIcon, SendIcon } from './icons';
 
 interface ChatComposerProps {
   onSend: (text: string) => void;
-  onPressAttach: () => void;
   onPressMic: () => void;
   disabled?: boolean;
 }
 
-export function ChatComposer({
-  onSend,
-  onPressAttach,
-  onPressMic,
-  disabled = false,
-}: ChatComposerProps) {
+export function ChatComposer({ onSend, onPressMic, disabled = false }: ChatComposerProps) {
   const [text, setText] = useState('');
   const canSend = text.trim().length > 0 && !disabled;
 
@@ -33,15 +27,6 @@ export function ChatComposer({
   return (
     <View style={styles.wrapper}>
       <View style={styles.bar}>
-        <Pressable
-          onPress={onPressAttach}
-          style={styles.iconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Attach file or photo"
-          hitSlop={6}
-        >
-          <PlusIcon size={22} color={palette.inkSoft} />
-        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}

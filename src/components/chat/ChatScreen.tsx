@@ -2,17 +2,16 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, Keyboard, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fonts, palette, spacing, theme } from '@/constants/theme';
+import { theme } from '@/constants/theme';
 import { useAntoine } from '@/hooks/useAntoine';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversation } from '@/hooks/useConversation';
 import { useModelStore } from '@/store/modelStore';
 
-import { AttachmentSheet } from './AttachmentSheet';
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatList } from './ChatList';
@@ -28,7 +27,6 @@ import {
   TrashIcon,
 } from './KebabMenu';
 import { PressToTalk } from './PressToTalk';
-import { XIcon } from './icons';
 
 export function ChatScreen() {
   const router = useRouter();
@@ -83,28 +81,9 @@ export function ChatScreen() {
 
   const [kebabOpen, setKebabOpen] = useState(false);
   const [recording, setRecording] = useState(false);
-  const [previewUri, setPreviewUri] = useState<string | null>(null);
-  const attachmentRef = useRef<BottomSheetModal>(null);
   const historyRef = useRef<BottomSheetModal>(null);
 
   const onSend = useCallback((text: string) => void send(text), [send]);
-
-  // The sheet is now dismissed BEFORE the picker launches (see
-  // AttachmentSheet.requestDismiss), so by the time onPicked fires the
-  // sheet is already animating out — no need to dismiss again here.
-  const onAttachmentPicked = useCallback(
-    (r: { type: 'image' | 'file'; uri: string }) => {
-      void send(
-        r.type === 'image' ? '' : `[file: ${r.uri.split('/').pop() ?? 'attachment'}]`,
-        r.uri,
-      );
-    },
-    [send],
-  );
-
-  const dismissAttachmentSheet = useCallback(() => {
-    attachmentRef.current?.dismiss();
-  }, []);
 
   const onMicPress = useCallback(() => {
     setRecording(true);
@@ -168,19 +147,10 @@ export function ChatScreen() {
         onPressMore={() => setKebabOpen(true)}
       />
 
-      <ChatList messages={messages} onPressImage={(uri) => setPreviewUri(uri)} />
+      <ChatList messages={messages} />
 
-      <ChatComposer
-        onSend={onSend}
-        onPressAttach={() => attachmentRef.current?.present()}
-        onPressMic={onMicPress}
-      />
+      <ChatComposer onSend={onSend} onPressMic={onMicPress} />
 
-      <AttachmentSheet
-        ref={attachmentRef}
-        onPicked={onAttachmentPicked}
-        requestDismiss={dismissAttachmentSheet}
-      />
       <HistorySheet
         ref={historyRef}
         conversations={conversations}
@@ -193,33 +163,10 @@ export function ChatScreen() {
 
       <KebabMenu visible={kebabOpen} onClose={() => setKebabOpen(false)} items={items} />
       <PressToTalk visible={recording} />
-
-      {previewUri ? (
-        <Modal visible transparent animationType="fade" onRequestClose={() => setPreviewUri(null)}>
-          <Pressable style={imgStyles.scrim} onPress={() => setPreviewUri(null)}>
-            <Image source={{ uri: previewUri }} style={imgStyles.image} />
-            <View style={imgStyles.close}>
-              <XIcon size={24} color={palette.textOnInk} />
-            </View>
-          </Pressable>
-        </Modal>
-      ) : null}
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-});
-
-const imgStyles = StyleSheet.create({
-  scrim: {
-    flex: 1,
-    backgroundColor: 'rgba(16,20,24,0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.s5,
-  },
-  image: { width: '100%', height: '70%', resizeMode: 'contain' },
-  close: { position: 'absolute', top: 60, right: 24, fontFamily: fonts.uiBold },
 });

@@ -102,23 +102,19 @@ describe('modelDownloadService', () => {
     service.__forceError.value = false;
   });
 
-  it('starts both files and reports weighted progress', async () => {
+  it('starts the main model file and reports progress', async () => {
     const onProgress = jest.fn();
     const onDone = jest.fn();
     service.start({ onProgress, onDone });
 
     await flushMicrotasks();
 
-    expect(mockNative.startDownload).toHaveBeenCalledTimes(2);
-    const calls = mockNative.startDownload.mock.calls.map(
-      ([params]) => params as Record<string, unknown>,
-    );
-    expect(calls.map((c) => c.fileName)).toEqual(
-      expect.arrayContaining([MODEL.files.main.filename, MODEL.files.mmproj.filename]),
-    );
-    expect(calls.every((c) => c.subdirectory === `models/${MODEL.id}/v1`)).toBe(true);
+    expect(mockNative.startDownload).toHaveBeenCalledTimes(1);
+    const params = mockNative.startDownload.mock.calls[0]![0] as Record<string, unknown>;
+    expect(params.fileName).toBe(MODEL.files.main.filename);
+    expect(params.subdirectory).toBe(`models/${MODEL.id}/v1`);
     // Default: wifiOnly = true (caller passed nothing).
-    expect(calls.every((c) => c.wifiOnly === true)).toBe(true);
+    expect(params.wifiOnly).toBe(true);
 
     fireProgress({
       downloadId: 'dl-1',
@@ -129,12 +125,11 @@ describe('modelDownloadService', () => {
     });
 
     const lastFraction = onProgress.mock.calls.at(-1)?.[0] as number;
-    const expected = MODEL.files.main.sizeBytes / 2 / MODEL.totalBytes;
-    expect(lastFraction).toBeCloseTo(expected, 4);
+    expect(lastFraction).toBeCloseTo(0.5, 4);
     expect(onDone).not.toHaveBeenCalled();
   });
 
-  it('fires onDone only after BOTH files complete', async () => {
+  it('fires onDone after the main file completes', async () => {
     const onProgress = jest.fn();
     const onDone = jest.fn();
     service.start({ onProgress, onDone });
@@ -147,27 +142,18 @@ describe('modelDownloadService', () => {
       fileName: MODEL.files.main.filename,
       totalBytes: MODEL.files.main.sizeBytes,
     });
-    expect(onDone).not.toHaveBeenCalled();
-
-    fireComplete({
-      downloadId: 'dl-2',
-      modelId: MODEL.id,
-      fileName: MODEL.files.mmproj.filename,
-      totalBytes: MODEL.files.mmproj.sizeBytes,
-    });
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
-  it('cancels both native downloads on handle.cancel', async () => {
+  it('cancels the active download on handle.cancel', async () => {
     const handle = service.start({ onProgress: jest.fn(), onDone: jest.fn() });
     await flushMicrotasks();
 
     handle.cancel();
     await flushMicrotasks();
 
-    expect(mockNative.cancelDownload).toHaveBeenCalledTimes(2);
+    expect(mockNative.cancelDownload).toHaveBeenCalledTimes(1);
     expect(mockNative.cancelDownload).toHaveBeenCalledWith('dl-1');
-    expect(mockNative.cancelDownload).toHaveBeenCalledWith('dl-2');
   });
 
   it('double-cancel is safe', async () => {
@@ -193,7 +179,7 @@ describe('modelDownloadService', () => {
     expect((onError.mock.calls[0][0] as Error).message).toMatch(/free space/i);
   });
 
-  it('adopts in-flight downloads from a previous launch (no duplicate start)', async () => {
+  it('adopts an in-flight download from a previous launch (no duplicate start)', async () => {
     mockNative.getActiveDownloads.mockResolvedValueOnce([
       {
         downloadId: 'old-1',
@@ -212,14 +198,11 @@ describe('modelDownloadService', () => {
     service.start({ onProgress, onDone: jest.fn() });
     await flushMicrotasks();
 
-    expect(mockNative.startDownload).toHaveBeenCalledTimes(1);
-    const startedFiles = mockNative.startDownload.mock.calls.map(
-      ([p]) => (p as { fileName: string }).fileName,
-    );
-    expect(startedFiles).toEqual([MODEL.files.mmproj.filename]);
+    // No duplicate start: the in-flight download is adopted as-is.
+    expect(mockNative.startDownload).not.toHaveBeenCalled();
 
     const lastFraction = onProgress.mock.calls.at(-1)?.[0] as number;
-    expect(lastFraction).toBeCloseTo(MODEL.files.main.sizeBytes / 4 / MODEL.totalBytes, 4);
+    expect(lastFraction).toBeCloseTo(0.25, 4);
   });
 
   it('passes wifiOnly=false through to native when caller opts in to cellular', async () => {
@@ -228,8 +211,8 @@ describe('modelDownloadService', () => {
     const calls = mockNative.startDownload.mock.calls.map(
       ([params]) => params as Record<string, unknown>,
     );
-    expect(calls).toHaveLength(2);
-    expect(calls.every((c) => c.wifiOnly === false)).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.wifiOnly).toBe(false);
   });
 
   it('calls onError when __forceError is set, without touching native', async () => {

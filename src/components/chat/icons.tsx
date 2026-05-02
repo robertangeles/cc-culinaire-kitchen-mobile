@@ -10,14 +10,6 @@ const baseProps = {
   strokeLinejoin: 'round' as const,
 };
 
-export function PlusIcon({ size = 24, color = palette.ink }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2.2} {...baseProps} />
-    </Svg>
-  );
-}
-
 export function MicIcon({ size = 24, color = palette.ink }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -50,53 +42,6 @@ export function MoreIcon({ size = 24, color = palette.ink }: IconProps) {
       <Circle cx={12} cy={5} r={1.6} fill={color} />
       <Circle cx={12} cy={12} r={1.6} fill={color} />
       <Circle cx={12} cy={19} r={1.6} fill={color} />
-    </Svg>
-  );
-}
-
-export function CameraIcon({ size = 22, color = palette.copperDeep }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M3 8a2 2 0 0 1 2-2h2.5l1.4-2.1a1 1 0 0 1 .8-.4h4.6a1 1 0 0 1 .8.4L16.5 6H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
-        stroke={color}
-        strokeWidth={1.85}
-        {...baseProps}
-      />
-      <Circle cx={12} cy={13} r={4} stroke={color} strokeWidth={1.85} {...baseProps} />
-    </Svg>
-  );
-}
-
-export function LibraryIcon({ size = 22, color = palette.copperDeep }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Rect
-        x={3}
-        y={3}
-        width={18}
-        height={18}
-        rx={2.4}
-        stroke={color}
-        strokeWidth={1.85}
-        {...baseProps}
-      />
-      <Circle cx={9} cy={9} r={2} stroke={color} strokeWidth={1.85} {...baseProps} />
-      <Path d="M21 15l-5-5L5 21" stroke={color} strokeWidth={1.85} {...baseProps} />
-    </Svg>
-  );
-}
-
-export function FileIcon({ size = 22, color = palette.copperDeep }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path
-        d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"
-        stroke={color}
-        strokeWidth={1.85}
-        {...baseProps}
-      />
-      <Path d="M14 3v6h6" stroke={color} strokeWidth={1.85} {...baseProps} />
     </Svg>
   );
 }
@@ -187,22 +132,6 @@ export function DownloadIcon({ size = 16, color = palette.copperDeep }: IconProp
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
       <Path d="M12 3v12M6 11l6 6 6-6M5 21h14" stroke={color} strokeWidth={2.2} {...baseProps} />
-    </Svg>
-  );
-}
-
-export function XIcon({ size = 18, color = palette.ink }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d="M6 6l12 12M18 6L6 18" stroke={color} strokeWidth={2} {...baseProps} />
-    </Svg>
-  );
-}
-
-export function ChevIcon({ size = 18, color = palette.inkFaint }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      <Path d="M9 6l6 6-6 6" stroke={color} strokeWidth={2.2} {...baseProps} />
     </Svg>
   );
 }

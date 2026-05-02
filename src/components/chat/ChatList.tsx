@@ -10,7 +10,6 @@ import type { Message } from '@/types/chat';
 
 interface ChatListProps {
   messages: Message[];
-  onPressImage?: (uri: string) => void;
 }
 
 // Stable ID for the virtual streaming bubble. Lives outside the component
@@ -74,7 +73,7 @@ function useRotatingCulinaryVerb(active: boolean, intervalMs = VERB_ROTATION_MS)
   return verb;
 }
 
-export function ChatList({ messages, onPressImage }: ChatListProps) {
+export function ChatList({ messages }: ChatListProps) {
   const activeId = useConversationStore((s) => s.activeId);
   const streamingConversationId = useConversationStore((s) => s.streamingConversationId);
   const streamingText = useConversationStore((s) => s.streamingText);
@@ -133,9 +132,7 @@ export function ChatList({ messages, onPressImage }: ChatListProps) {
       ref={listRef}
       data={data}
       keyExtractor={(m) => m.id}
-      renderItem={({ item }: ListRenderItemInfo<Message>) => (
-        <ChatBubble message={item} onPressImage={onPressImage} />
-      )}
+      renderItem={({ item }: ListRenderItemInfo<Message>) => <ChatBubble message={item} />}
       contentContainerStyle={styles.list}
       keyboardShouldPersistTaps="handled"
       onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
