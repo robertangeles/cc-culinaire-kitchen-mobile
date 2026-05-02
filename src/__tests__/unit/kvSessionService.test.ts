@@ -76,6 +76,7 @@ function makeFakeContext(): LlamaContext {
   return {
     id: 1,
     modelPath: '/mock/model.gguf',
+    multimodalEnabled: false,
     native: {
       tokenize: jest.fn(async () => ({
         tokens: new Array(410).fill(0),

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, type ListRenderItemInfo, StyleSheet } from 'react-native';
 
 import { ChatBubble } from '@/components/chat/ChatBubble';
@@ -97,6 +97,16 @@ export function ChatList({ messages, onPressImage }: ChatListProps) {
     isStreamingThisConversation && streamingStage === 'streaming' && streamingText.length === 0;
   const rotatingVerb = useRotatingCulinaryVerb(isPreTokenStreaming);
 
+  // Auto-scroll the chat to the latest content whenever it grows. Without
+  // this, a long assistant reply (especially on image turns where the
+  // model produces ~900 tokens) pushes the user's most recent send off
+  // the top of the screen and never scrolls back into view. Using
+  // `onContentSizeChange` covers all the cases — new user message,
+  // streaming bubble appears, every streamed token, final commit —
+  // because each one changes the list's content height.
+  // `animated: false` snaps without jank during fast token streaming.
+  const listRef = useRef<FlatList<Message>>(null);
+
   if (messages.length === 0 && !isStreamingThisConversation) {
     return <ChatGreeting />;
   }
@@ -120,6 +130,7 @@ export function ChatList({ messages, onPressImage }: ChatListProps) {
 
   return (
     <FlatList
+      ref={listRef}
       data={data}
       keyExtractor={(m) => m.id}
       renderItem={({ item }: ListRenderItemInfo<Message>) => (
@@ -127,6 +138,7 @@ export function ChatList({ messages, onPressImage }: ChatListProps) {
       )}
       contentContainerStyle={styles.list}
       keyboardShouldPersistTaps="handled"
+      onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
     />
   );
 }
