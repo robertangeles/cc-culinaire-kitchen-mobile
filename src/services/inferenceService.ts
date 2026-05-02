@@ -291,7 +291,16 @@ export async function completion(
       // 150-200 word answer — plenty for a culinary reply.
       n_predict: 384,
       temperature: 0.7,
-      top_p: 0.9,
+      // Sampler aligned with off-grid-mobile-ai's vision-capable setup.
+      // top_p was 0.9, no top_k, no repeat penalty — that combination let
+      // the model lock in early wrong tokens on perception turns ("watch"
+      // → "smartphone screen") and roll forward without revising. Off-grid
+      // ships top_k:40 + top_p:0.95 + penalty_repeat:1.1 for the same
+      // Q4_0/mmproj stack and reads images correctly. Cheaper experiment
+      // than re-quantizing the mmproj from BF16 → Q8_0.
+      top_p: 0.95,
+      top_k: 40,
+      penalty_repeat: 1.1,
       stop: [...STOP_TOKENS],
       // Disable Gemma's <|channel|>thought reasoning block. The kwarg is
       // typed as Record<string, string> and rendered through Jinja —
