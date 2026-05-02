@@ -141,5 +141,15 @@ export function ChatList({ messages }: ChatListProps) {
 }
 
 const styles = StyleSheet.create({
-  list: { paddingVertical: spacing.s3 },
+  list: {
+    paddingTop: spacing.s3,
+    // Generous bottom padding so the streaming bubble's tail lands
+    // comfortably above the composer + keyboard accessory bar rather
+    // than flush against them. `scrollToEnd` (fired on every
+    // onContentSizeChange) pins the last item's bottom edge to the
+    // FlatList's content bottom — without this inset the newest token
+    // lands right at the edge of the viewport with no breathing room,
+    // making it hard to read what's being typed in real time.
+    paddingBottom: spacing.s8,
+  },
 });
