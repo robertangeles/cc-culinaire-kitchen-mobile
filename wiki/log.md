@@ -4,6 +4,69 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-03 — v1.x i18n roadmap (CEO + Eng review) and v1.1 PR-A merged
+
+Big architecture day. Nothing visibly changed in the app, but the foundation for everything from v1.1 through v1.3+ got laid down and shipped.
+
+### Pre-coding work — two reviews back-to-back
+
+After yesterday's v1 text-only ship (`3da4492`) closed the vision investigation, today's session opened with the question: what's v1.1? The CEO review explored alternatives (STT via whisper.cpp, recipe scaling tool, conversation export) before holding the locked direction (i18n). Then expanded the scope: device-locale auto-detect, authored-not-auto-translated prompts (web admin owns translations), per-conversation language override, locale-aware RAG retrieval (v1.3+), automated quality eval harness gating each language at v1.2.
+
+The Eng review layered 7 implementation decisions on top:
+
+- **D1** Slug naming uses dash separator (`antoine-system-prompt-fr`), not colon. URL-safe, conforms to `[a-z0-9-]+`.
+- **D2** Boot effect with i18next defaulting to EN, layered upgrade via store hydrate. Defensive against future expo-localization API changes.
+- **D3** `promptCacheService` refactor for v1.2 — parameterize `getActivePrompt(slug)`, add explicit 404-set tracking distinct from network-error fallback.
+- **D4** Mobile picker uses a feature flag (web-side endpoint) to gate per-language visibility — decouples mobile + web release cadences.
+- **D5** Hierarchical-namespaced translation keys (`auth.signIn`, not `"Sign in"`). Stable identifiers; English text in `locales/en.json`.
+- **D6** `useI18nStore` (Zustand) is single source of truth; SecureStore + i18next are downstream side effects.
+- **D7** Automated eval harness from v1.2 (not manual-first). Lives on the web side; mobile is a downstream consumer via D4's feature flag.
+
+13 decisions total (CEO-1..6 + Eng-D1..D7). All logged in the cross-project `decisions.md`.
+
+### PR #21 — v1.1 PR-A i18n infrastructure (`dde991d`)
+
+Foundation layer. JS-only. Zero visible UI change. 9 files, +489 lines.
+
+- **`src/i18n/index.ts`** — i18next initialised synchronously at module load with the EN resource bundle. `applyDeviceLocaleIfStoreEmpty()` boot helper hydrates the store from SecureStore and syncs i18next.
+- **`src/store/i18nStore.ts`** — Zustand store as the single source of truth. `setLanguage()` fans out to SecureStore + `i18n.changeLanguage()` as side effects. `hydrate()` reads SecureStore at boot, returns whether a persisted language was found.
+- **`src/locales/en.json`** — empty namespace skeleton with the canonical six top-levels (`auth`, `chat`, `settings`, `errors`, `actions`, `chef`).
+- **`docs/i18n-conventions.md`** — hierarchical-namespaced key convention, variable interpolation with `{{}}`, plural rules, forbidden patterns (no concatenation, no conditional t() calls, no inline JSX). Spec for PR-B's mechanical extraction.
+- **`src/__tests__/unit/i18nStore.test.ts`** — 7 unit tests covering hydrate (4 cases including SecureStore corruption + unsupported value defenses) + setLanguage (3 cases including no-op early return + unsupported guard).
+- **`src/constants/config.ts`** — adds `STORAGE_KEYS.language: 'ckm_language'`.
+- **`app/_layout.tsx`** — wires `applyDeviceLocaleIfStoreEmpty` into the existing boot effect chain.
+- **`package.json` + `pnpm-lock.yaml`** — adds `i18next` + `react-i18next`. Crucially does NOT add `expo-localization`; see below.
+
+Pre-flight green: tsc clean, lint clean, **157/157 tests pass** (was 150 — added 7). Device-verified on Moto G86 Power: app boots normally, no errors in logcat, kebab menu unchanged, chat sends/receives normally, no visible difference from v1.
+
+### Gotcha worth recording: `expo-localization` deferred to v1.2
+
+Originally part of PR-A. Pulled mid-test when Metro started throwing `UnableToResolveError` on a fresh dev-client launch. Root cause: `expo-localization` is a native module that needs the dev client rebuilt (`pnpm android`) to link the native bindings — a `pnpm add` alone isn't enough. The error compounded with a stale Metro module-graph cache that wasn't seeing the freshly-installed JS-only deps either; `pnpm start:fresh` (which passes `--clear` to Metro) fixed the cache half.
+
+Pragmatic call: `expo-localization` adds zero value to v1.1 anyway — with only `'en'` in `SUPPORTED_LANGUAGES`, the device-locale auto-detect path is already a no-op (any non-EN device locale fails the supported-check). Defer the dep + the device-locale auto-detect to v1.2, where we'd be rebuilding the dev client anyway for the picker UI native changes. v1.1's boot effect is hydrate-only (read SecureStore → sync i18next).
+
+This means the Eng review's D2 decision (boot effect with device-locale read) is honored _partially_ in v1.1 — the boot-effect pattern + i18next-EN-default are wired; the device-locale call is deferred. Documented in the PR-A docstring at the top of `src/i18n/index.ts`.
+
+### Cross-project doc updates
+
+`../cc-culinaire-shared-context/mobile-needs.md` got four new entries (all 2026-05-03):
+
+- **Per-language Antoine system prompts** — slug naming convention, 404 semantics, authored-not-translated rule, eval gate
+- **Per-language feature-flag endpoint** — `GET /api/mobile/feature-flags` shape, caching expectations
+- **i18n quality eval harness** — fixture set, LLM-judge rubric, pass/fail gate, lives on the web side
+- **apiClient HTTP status exposure** — informational note about mobile-side refactor for v1.2
+
+`../cc-culinaire-shared-context/decisions.md` got two new entries:
+
+- **v1 ships text-only; vision removed end-to-end** — context for yesterday's PR #20 ship
+- **i18n roadmap (CEO + Eng review consolidated)** — captures all 13 decisions in one place for the web-side reader
+
+### Side cleanup
+
+- Deleted two local-only legal-doc handoff briefs (`tasks/privacy-policy-context.md`, `tasks/terms-of-service-context.md`) after they were used to generate the briefs handed to a different Claude. `.gitignore` reverted to its post-v1 state.
+
+---
+
 ## 2026-05-01 (late afternoon) — Lite branding + post-auth flash fix (PR #14 squash-merge `f143b49`) and streaming-bubble verb rotation (PR #13 squash-merge `190bc64`)
 
 Two visual / UX polish PRs landed back-to-back this afternoon.
