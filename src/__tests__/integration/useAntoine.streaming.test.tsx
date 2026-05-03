@@ -305,60 +305,6 @@ describe('useAntoine — streaming + RAG + prompt fetch', () => {
     expect(s.streamingStage).toBeNull();
   });
 
-  it('image-only send: injects a chef-voiced default + image-aware system addendum', async () => {
-    // Image-only sends arrive with content='' from the attachment sheet's
-    // onAttachmentPicked. The hook injects a default user message so:
-    //   1. The user-bubble in the conversation has parseable text (not blank)
-    //   2. ragService.retrieve has a query (no programmer-error throw)
-    //   3. Antoine receives a real prompt for the model to act on
-    // Plus: the system message gets a photo-aware addendum.
-    const llamaCompletion = jest.spyOn(
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      require('@/services/inferenceService'),
-      'completion',
-    );
-    const { result } = renderHook(() => useAntoine());
-
-    await act(async () => {
-      await result.current.send('', 'file:///mock/photo.jpg');
-    });
-
-    // Visible user message in the conversation: chef-voiced default text +
-    // the image attachment URI both present.
-    const insertCalls = (messageQueries.insert as jest.Mock).mock.calls.map((c) => c[0]);
-    const userInsert = insertCalls.find((c) => c.role === 'user');
-    expect(userInsert?.content).toBe("Take a look at this. What's your read?");
-    expect(userInsert?.imageUri).toBe('file:///mock/photo.jpg');
-
-    // RAG retrieve is SKIPPED for any image-attached send. Empirically,
-    // even a single tangentially-related RAG chunk biases the model
-    // toward fabricating food content on non-food images (the chunks
-    // pulled by the generic chef-voiced default compete with the vision
-    // pathway). Vision IS the context for image turns. See useAntoine.ts.
-    expect(retrieveMock).not.toHaveBeenCalled();
-
-    // System message includes the photo-engagement addendum on this
-    // device stack (Mediatek + llama.rn 0.12.0-rc.5 + BF16 mmproj +
-    // CPU-only). Empirically, removing it makes the model invent food
-    // content from the persona's text-priors instead of grounding in
-    // the image. See SYSTEM_PROMPT_IMAGE_ADDENDUM in useAntoine.ts.
-    expect(llamaCompletion).toHaveBeenCalled();
-    const messages = (
-      llamaCompletion.mock.calls[0]?.[1] as { messages: { role: string; content: string }[] }
-    ).messages;
-    const systemMsg = messages[0];
-    expect(systemMsg?.role).toBe('system');
-    expect(systemMsg?.content).toMatch(/CACHED_SERVER_PROMPT/);
-    expect(systemMsg?.content).toMatch(/image is attached/i);
-
-    // No error fallback got persisted — the send completed cleanly.
-    const errorFallback = insertCalls.find(
-      (c) => c.role === 'assistant' && /empty query|stalled/i.test(c.content),
-    );
-    expect(errorFallback).toBeFalsy();
-    llamaCompletion.mockRestore();
-  });
-
   it('writes the "pick a chef" fallback when the model is not active, without invoking inference', async () => {
     useModelStore.setState({ isActive: false });
     const { result } = renderHook(() => useAntoine());

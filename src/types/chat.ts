@@ -5,7 +5,6 @@ export interface Message {
   conversationId: string;
   role: MessageRole;
   content: string;
-  imageUri?: string;
   createdAt: number;
 }
 

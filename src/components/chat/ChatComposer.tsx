@@ -3,21 +3,14 @@ import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { fonts, palette, radii, spacing, theme } from '@/constants/theme';
 
-import { MicIcon, PlusIcon, SendIcon } from './icons';
+import { SendIcon } from './icons';
 
 interface ChatComposerProps {
   onSend: (text: string) => void;
-  onPressAttach: () => void;
-  onPressMic: () => void;
   disabled?: boolean;
 }
 
-export function ChatComposer({
-  onSend,
-  onPressAttach,
-  onPressMic,
-  disabled = false,
-}: ChatComposerProps) {
+export function ChatComposer({ onSend, disabled = false }: ChatComposerProps) {
   const [text, setText] = useState('');
   const canSend = text.trim().length > 0 && !disabled;
 
@@ -33,15 +26,6 @@ export function ChatComposer({
   return (
     <View style={styles.wrapper}>
       <View style={styles.bar}>
-        <Pressable
-          onPress={onPressAttach}
-          style={styles.iconBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Attach file or photo"
-          hitSlop={6}
-        >
-          <PlusIcon size={22} color={palette.inkSoft} />
-        </Pressable>
         <TextInput
           value={text}
           onChangeText={setText}
@@ -62,17 +46,7 @@ export function ChatComposer({
           >
             <SendIcon size={20} color={palette.textOnCopper} />
           </Pressable>
-        ) : (
-          <Pressable
-            onPress={onPressMic}
-            style={styles.iconBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Hold to talk"
-            hitSlop={6}
-          >
-            <MicIcon size={22} color={palette.inkSoft} />
-          </Pressable>
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -98,13 +72,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.s2,
     paddingVertical: spacing.s2,
     minHeight: 52,
-  },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   input: {
     flex: 1,

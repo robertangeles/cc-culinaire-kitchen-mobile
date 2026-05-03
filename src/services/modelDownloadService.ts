@@ -66,7 +66,7 @@ export const __forceError = { value: false };
 
 const MODEL_SUBDIRECTORY = `models/${MODEL.id}/v1`;
 
-const FILES = [MODEL.files.main, MODEL.files.mmproj] as const;
+const FILES = [MODEL.files.main] as const;
 const TOTAL_BYTES = FILES.reduce((sum, f) => sum + f.sizeBytes, 0);
 
 function getNativeModule(): BackgroundDownloadNativeModule | null {

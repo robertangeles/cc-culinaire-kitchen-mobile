@@ -38,16 +38,24 @@ export const GOOGLE_WEB_CLIENT_ID: string =
  *
  * Quantization: Q4_0 main weights (re-quantized via mainline llama.cpp
  * on 2026-04-30, replacing the prior Q4_K_M file). Q4_0 stores weights
- * in a NEON-friendly layout that runs natively on ARM without the
- * SIMD repack buffer that OOMs the 8 GB device — expected ~5× prefill
- * speedup on the Moto G86 Power. Mmproj stays at BF16 (~945 MB) — same
- * bytes as the prior antoine_mmproj.gguf, just renamed on R2.
+ * in a NEON-friendly layout that runs natively on ARM without the SIMD
+ * repack buffer that OOMs the 8 GB device — ~5× prefill speedup on the
+ * Moto G86 Power.
+ *
+ * v1 ships text-only — the mmproj projector is not bundled. On-device
+ * vision accuracy on Q4_0 + CPU was unreliable across photo
+ * compositions (categorical food misidentification on visually-
+ * ambiguous shots). The projector entry was removed on 2026-05-03.
+ * If we re-enable vision in a future version (gated on either Vulkan
+ * GPU offload landing in llama.rn's prebuilt JNI, or a verified higher-
+ * precision projector → Q4_0 backbone path), restore the `mmproj`
+ * entry following the same R2 + SHA-256 pattern.
  *
  * Sizes + SHA-256 verified via PowerShell `Get-FileHash` against the
- * R2-hosted files on 2026-04-30. The native DownloadWorker compares
- * SHA byte-for-byte against the file landed on disk; mismatch deletes
- * the file and surfaces FILE_CORRUPTED to JS. Lowercased here because
- * the worker calls .equals(ignoreCase = true).
+ * R2-hosted file. The native DownloadWorker compares SHA byte-for-byte
+ * against the file landed on disk; mismatch deletes the file and
+ * surfaces FILE_CORRUPTED to JS. Lowercased here because the worker
+ * calls .equals(ignoreCase = true).
  */
 export const MODEL = {
   id: 'antoine',
@@ -59,14 +67,8 @@ export const MODEL = {
       sizeBytes: 5_185_929_024,
       sha256: '86b4b9d898bb65c771fcbd1e64c7ac80465c669ac1388ecb84963409b2e74481',
     },
-    mmproj: {
-      filename: 'antoine-v2-mmproj-bf16.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine-v2-mmproj-bf16.gguf',
-      sizeBytes: 991_551_840,
-      sha256: '737485f56225fc61a1468711c4bb07c2b0b9f7f94db0c4cc5feb9aaae429938b',
-    },
   },
-  totalBytes: 5_185_929_024 + 991_551_840,
+  totalBytes: 5_185_929_024,
 } as const;
 
 export const STORAGE_KEYS = {
