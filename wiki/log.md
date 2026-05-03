@@ -4,6 +4,48 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-03 (evening) — v1.2 closed: PR #23 (history UX) + v1.2 picker + PR #24 (legal pages, food-safety ack, language badge)
+
+Three merges today landed in sequence and closed the v1.2 milestone end-to-end.
+
+### PR #23 (`f1777b0`) — v1.1.5 history sheet UX
+
+Three small but visible bugs from the v1.1 PR-B device-test pass cleaned up in one focused PR: snap-point opening at ~25-30% instead of 50% (Android nav-bar safe-area inset wasn't applied), no per-row delete (every row was a Pressable with only `onPick`), no clear-all action, and every conversation listing as "Untitled conversation". Fixed by applying `useSafeAreaInsets` to the sheet snap-points, adding a long-press menu with delete + a kebab-level "Clear all history" with confirm dialog, and auto-generating titles from the first user message at commit time. Indexed; no new wiki page (UX-fix, not pattern).
+
+### `742a39d` — v1.2 picker checkpoint (direct push, not a PR)
+
+Language picker UI with the partial-language banner UX (Option A from the eng review). `getActivePrompt(slug)` was parameterised; `apiClient` got the HTTP-status refactor with a typed `HttpError` for the 404-set logic; `ckm_conversation` got the per-conversation `language` column migration; `expo-localization` was re-added with the dev-client rebuild that v1.1 had deferred. Checkpointed on the branch rather than PR'd because the next layer (legal + food-safety) was about to land on top.
+
+### PR #24 (`271fe97`) — v1.2 finale: legal pages + food-safety ack + language badge
+
+The session that produced this PR is also the source of two new shared-context conventions worth recording.
+
+**Legal pages.** New `(legal)` route group with dynamic `[slug].tsx`. `siteService` fetches `GET /api/site-pages/:slug?surface=mobile` and returns a tri-state resolution (`ok` / `unavailable` / `error`) so `LegalPageScreen` can render cache-first, swap on fresh fetch, and show a friendly placeholder with retry on 404. `LoginScreen`'s `<Trans>` slots route to `/(legal)/{terms|privacy}`. The `legal.*` i18n namespace landed in both `en.json` and `fr.json`, with the link label and screen title aligned to "Privacy Policy" / "Politique de confidentialité" to match the API's title field (the alternative — asking Robert to retitle the DB row to "Kitchen Privacy Notice" — got rejected; align mobile to web, not the other way around).
+
+**RouteGuard fix — important.** First device test of the legal flow showed the link tap opening nothing. Root cause traced via Debugging Protocol: `RouteGuard` short-circuited any non-`(welcome|auth|onboarding)` segment with `router.replace('/(welcome)')` for unauthenticated users. Pushing to `/(legal)/terms` made segments[0] = `(legal)`, hit the unauth-bounce, screen never visibly mounted. Fixed with an early return for `(legal)` so the group is reachable in any auth state — semantically correct since ToS + Privacy MUST be readable pre-signup.
+
+**Food-safety acknowledgement screen.** Required pre-launch per the disclaimer surfacing tracked in the previous in-flight section. New `(food-safety)` route group + `FoodSafetyAckScreen`. Per-session in-memory ack via `foodSafetyStore` (Zustand). `RouteGuard` requires the ack between email-verify and chat entry. Sign-out resets the per-session flag so the next sign-in re-prompts.
+
+**Language badge in `ChatHeader`.** Small copper badge to the right of "Antoine" when the active language ≠ EN. EN users see no extra chrome (the 99% case); non-EN users get an at-a-glance signal of which language Antoine is responding in.
+
+### Cross-project unblock — the 404 wasn't a publish-state issue
+
+Mid-session diagnosis caught a contradiction: web admin showed both `terms` and `privacy` rows as LIVE, but `GET /api/site-pages/{slug}?surface=mobile` returned 404 for both. After delegating to an Explore subagent (and being correctly called out by Robert for skipping the shared-context check first), turned out the entire `/api/site-pages` route was sitting on an unpushed local branch on the web side. Web session pushed it as PR #14, merged, Render auto-deployed at ~16:53. All three endpoints returned 200 within minutes. Surface partition (`(slug, surface)` unique) was a real concern but not the actual cause — Robert's clicks had been on the right rows all along.
+
+### SessionStart hooks for cross-project visibility
+
+Added `.claude/hooks/web-needs-on-session-start.ps1` (mobile repo) and `.claude/hooks/mobile-needs-on-session-start.ps1` (web repo). Each surfaces the OTHER side's `*-needs.md` into the new session's context, but only when the file mtime has advanced past a sidecar timestamp at `$env:TEMP\culinaire-kitchen\*-needs-last-seen.txt`. Closes the cross-project visibility gap that bit us this session — the web Claude session updated `mobile-needs.md` to resolve the 404 mid-turn, and we only noticed because the harness reminded us. The hook means the next session sees it automatically. Pipe-tested both scripts standalone; SessionStart hooks fire outside the current turn so live-fire proof has to wait for the next session start.
+
+### R2 cleanup
+
+Both `antoine-v2-mmproj-bf16.gguf` (945 MB) and `antoine-v2-mmproj-q8_0.gguf` (560 MB) deleted from the bucket. Main `antoine-v2-q4_0.gguf` (5.19 GB) stays. No production code references either of the removed files; safe to drop.
+
+### What's next (per the now-updated `synthesis/in-flight.md`)
+
+Latent bug cleanup (apiClient AbortSignal threading + modelDownloadService duplicate-row race), then PR #7 + PR #8 triage (both still OPEN since 2026-04-29; deprioritised, not blocked), then v1.3 (additional languages incrementally + locale-aware RAG retrieval).
+
+---
+
 ## 2026-05-03 — Device-screenshot procedure documented
 
 Burned ~6 minutes of fumbling between PowerShell `>` redirection (mangles PNG bytes via UTF-16 string conversion) and Git Bash `MSYS_NO_PATHCONV` interactions (rewrites `/sdcard/...` to `C:/Program Files/Git/sdcard/...`). Captured the working PowerShell one-liner and the three failure modes in [concepts/device-screenshots.md](concepts/device-screenshots.md) so the next session goes straight to `adb shell screencap` + `adb pull` from PowerShell. Indexed.
