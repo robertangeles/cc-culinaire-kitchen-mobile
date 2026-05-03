@@ -29,6 +29,8 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Last completed (today, 2026-05-03)
 
+- **PR #26 merged (`21f18a5`).** Infra cleanup — wiki CRLF parser fix (PR #7's `293461c` cherry-picked) + minimal GitHub Actions CI (PR #8's `f1974c0` cherry-picked, fresh from main, dropping the stale CLAUDE.md edits + obsolete commits). First CI run caught a real bug: `react-native-markdown-display` was missing from `package.json` (PR #24 had only added it to local `node_modules`); fixed in the same PR. Also opted into Node 24 for JS-based actions ahead of GitHub's June 2026 forced cutover. Closes #7 + #8. CI is now live and runs on every future PR.
+- **PR #25 merged (`03bc43e`).** Latent-bug cleanup — `AbortSignal` threaded through `apiClient` (RAG 3s timeout now actually cancels the fetch, not just drops the response); module-level `inflightBootstrap` chain in `modelDownloadService` serializes concurrent `start()` calls so they adopt instead of duplicate Room rows. +5 unit tests.
 - **PR #24 merged (`271fe97`) + device-verified.** v1.2 finale — legal pages + food-safety ack + language badge. Built on top of the v1.2 picker checkpoint (`742a39d`). Includes RouteGuard `(legal)` early-return so unauth users can read ToS, `react-native-markdown-display` themed in the editorial palette, `<Trans>` slots routing from LoginScreen to `/(legal)/{terms|privacy}`, FR locale label aligned to "Politique de confidentialité" matching the API title, copper non-EN badge in ChatHeader.
 - **`742a39d` v1.2 picker checkpoint.** Language picker UI with partial-language banner (Option A); `getActivePrompt(slug)` parameterised; `apiClient` HTTP-status refactor with typed `HttpError`; `ckm_conversation.language` migration; `expo-localization` re-added.
 - **PR #23 merged (`f1777b0`).** v1.1.5 history sheet UX — fixed snap-point position, added per-row delete, clear-all action, auto-titles from first user message.
@@ -38,16 +40,13 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Currently in flight
 
-Nothing blocked. Branch state clean.
+Nothing blocked. Branch state clean. CI is live on main and gates every PR; lint / tsc / test all passing on the latest commit.
 
 ## Next action — locked sequence
 
-1. **Latent-bug cleanup (small, focused PR).** Two known-but-unfixed bugs flagged across recent sessions:
-   - `apiClient.post` doesn't thread an `AbortSignal` — the 3s RAG timeout drops the response but doesn't cancel the fetch. Costs background CPU + network beyond the user-visible timeout.
-   - Duplicate-row race in `modelDownloadService.start()` for concurrent calls. Latent (no observed user impact yet) but real.
-2. **PR #7 + PR #8 triage.** Two open PRs sitting on the queue: **#7** (wiki CRLF parser fix) and **#8** (minimal GitHub Actions CI — lint / tsc / test). Both still OPEN per `gh pr list`. Decide rebase-or-close before they bit-rot further. CI in particular would have caught the 168/26 verification work this session does manually every push.
-3. **v1.3 — Additional languages, incrementally.** Each new language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip). Locale-aware RAG retrieval lands at v1.3 (chunks tagged by language).
-4. **v1.4+ — TBD.** Vision rerun gated on Vulkan upstream; weekly monitor still running.
+1. **v1.3 — Additional languages, incrementally.** First candidate is FR (placeholder `antoine-system-prompt-fr` already live on the web side; needs human authoring + culinary-reviewer signoff + eval-harness pass before the picker exposes FR via the feature flag). Each subsequent language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip).
+2. **v1.3 — Locale-aware RAG retrieval.** Chunks tagged by language; retrieval honours the active conversation language. Web-side schema work needed first.
+3. **v1.4+ — TBD.** Vision rerun gated on Vulkan upstream (weekly monitor `trig_01S6Yk7CnGzxVzo2J698aaCv` still running). Other product directions (recipe scaling tool, conversation export, STT) explored + parked at the 2026-05-03 CEO review.
 
 ## Open questions / blockers
 

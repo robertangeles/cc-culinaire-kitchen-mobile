@@ -4,6 +4,40 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-03 (late evening) — Infra cleanup landed: PR #25 (latent bugs) + PR #26 (CRLF parser fix + GitHub Actions CI)
+
+Two infra PRs shipped tonight closed the operational backlog that had been quietly accumulating across the v1 → v1.2 product sprint.
+
+### PR #25 (`03bc43e`) — latent bug cleanup
+
+Two bugs flagged across recent sessions but never fixed.
+
+**`apiClient` AbortSignal threading.** `ragService.retrieve()` was racing `apiClient.post` against a 3s `setTimeout` via `Promise.race` — when the timer won, the underlying fetch kept running, parsed the JSON, then discarded the result. Wasted CPU + radio time on every slow query. Fixed by adding `signal: AbortSignal` to `RequestOptions`, threading it through both the main fetch and the post-401 retry, and detecting `AbortError` in the catch block (re-throw as-is, don't wrap in `NetworkError`). `ragService.retrieve()` now uses an `AbortController`; `controller.abort()` on timeout actually cancels the fetch.
+
+**`modelDownloadService` concurrent-start race.** Two `start()` calls in quick succession (e.g., from two `useModelDownload` consumers on different screens) would both race past `getActiveDownloads()` before either's `startDownload()` landed, both see "no active downloads", and both spawn duplicate native workers + Room rows. Fixed with a module-level `inflightBootstrap: Promise<void> | null` chain — each new `start()`'s read-then-spawn awaits the previous bootstrap before running, so the second caller's `getActiveDownloads()` sees the first's row and adopts via the existing in-flight-adoption path. Latest-wins clearing in `.finally`.
+
++5 unit tests (was 168/26, now 173/27). New `apiClient.test.ts` covers signal threading + AbortError propagation + the NetworkError-wrapping regression check; `ragService.test.ts` got the captured-signal-aborted assertion; `modelDownloadService.test.ts` got a concurrent-start test that resolves the two `getActiveDownloads()` calls in sequence and asserts `startDownload()` fires only once.
+
+### PR #26 (`21f18a5`) — wiki CRLF parser fix + GitHub Actions CI
+
+Two long-stalled infra PRs (#7 + #8 from 2026-04-29) consolidated into one fresh branch off main. Both originals had drifted past clean rebase — main had ~17 PRs merged into it since their merge-base — so the path was cherry-pick what's still surgical, drop what's stale.
+
+**The CRLF parser fix is more than cosmetic.** Direct evidence the bug was live: after PR #25 merged earlier in the evening, the post-merge `wiki:graph build` dropped from 10 edges → 4 edges. With this fix, `pnpm wiki:graph build` reports 19 nodes / 64 edges / 2 broken refs (the 2 are the intentional `[[on-device-inference]]` forward-references from the original wiki bootstrap). Every pull on Windows had been silently breaking the graph by stripping all the `related:` edges; nobody noticed because `pnpm wiki:status` happily reports a wiki with zero relationships.
+
+**The CI workflow ships `.github/workflows/ci.yml` with three gates** (lint / tsc / test) — Node 20 LTS, pnpm 10 pinned to match local dev, concurrency group, 15-minute timeout. Out of scope deliberately: contract tests (need creds), Android build (slow + JDK pain), iOS (Android-only), Detox (no E2E suite yet). Mirrors the local pre-push routine that CLAUDE.md was actually documenting (renamed misleading "CI Pipeline" header at some point future).
+
+**CI caught a real bug on its very first run on this PR.** `react-native-markdown-display` had been added to local `node_modules` at some point during v1.2 work but never made it into `package.json` or `pnpm-lock.yaml`. Locally the `LegalPageScreen.tsx` import resolved fine; CI's first `pnpm install --frozen-lockfile` correctly installed only what's in the lockfile, then `pnpm lint`'s `import/no-unresolved` rule failed at line 24. Fixed in the same PR by adding the dep properly. This is exactly why CI mattered — the bug would have shipped to whoever next ran a clean install.
+
+Also opted into Node 24 for JS-based actions ahead of GitHub's June 2nd, 2026 forced cutover (`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'`) — silences the deprecation warning emitted on every run by `actions/checkout@v4` + `actions/setup-node@v4` + `pnpm/action-setup@v4`, all of which still ship Node 20 internally.
+
+**PR #7 + #8 closed as superseded** with comments documenting which commits were preserved verbatim and which were dropped. The `293461c` and `f1974c0` commits stay in the git history on those branches; only the wiki content edits + `useSegments()` cast + babel dep + CLAUDE.md edits were dropped (all were either stale or already addressed via other routes).
+
+### What's next (per the now-updated `synthesis/in-flight.md`)
+
+v1.3 — additional languages incrementally (FR placeholder waiting on human authoring + eval signoff before the picker exposes it) and locale-aware RAG retrieval (chunks tagged by language).
+
+---
+
 ## 2026-05-03 (evening) — v1.2 closed: PR #23 (history UX) + v1.2 picker + PR #24 (legal pages, food-safety ack, language badge)
 
 Three merges today landed in sequence and closed the v1.2 milestone end-to-end.
