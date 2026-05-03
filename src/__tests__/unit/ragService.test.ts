@@ -50,20 +50,28 @@ describe('ragService.retrieve', () => {
     apiPost.mockResolvedValueOnce({ chunks: [], vectorSearchEnabled: true });
     await retrieve('  how do I rescue broken hollandaise  ');
     expect(apiPost).toHaveBeenCalledTimes(1);
-    expect(apiPost).toHaveBeenCalledWith('/api/mobile/rag/retrieve', {
-      query: 'how do I rescue broken hollandaise',
-      limit: 5,
-    });
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/mobile/rag/retrieve',
+      {
+        query: 'how do I rescue broken hollandaise',
+        limit: 5,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('passes through caller-specified limit + category', async () => {
     apiPost.mockResolvedValueOnce({ chunks: [], vectorSearchEnabled: true });
     await retrieve('beurre blanc', { limit: 8, category: 'Recipes by Cuisine' });
-    expect(apiPost).toHaveBeenCalledWith('/api/mobile/rag/retrieve', {
-      query: 'beurre blanc',
-      limit: 8,
-      category: 'Recipes by Cuisine',
-    });
+    expect(apiPost).toHaveBeenCalledWith(
+      '/api/mobile/rag/retrieve',
+      {
+        query: 'beurre blanc',
+        limit: 8,
+        category: 'Recipes by Cuisine',
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
   });
 
   it('returns the chunks array from a 200 response', async () => {
@@ -101,17 +109,50 @@ describe('ragService.retrieve', () => {
 
   it('honours the 3-second timeout when the network is slow', async () => {
     jest.useFakeTimers();
-    let neverResolves: (value: unknown) => void = () => undefined;
-    apiPost.mockReturnValueOnce(new Promise((resolve) => (neverResolves = resolve)));
+    // Reject with AbortError when the controller fires (matches what
+    // fetch does when its signal aborts). The retrieve() call's catch
+    // block treats AbortError as the silent-fallback timeout case.
+    apiPost.mockImplementationOnce(
+      (_path, _body, opts) =>
+        new Promise<never>((_, reject) => {
+          const signal = (opts as { signal?: AbortSignal } | undefined)?.signal;
+          signal?.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    );
 
     const promise = retrieve('test');
-    // Race the manual timer past the 3s deadline.
     jest.advanceTimersByTime(3001);
     const result = await promise;
     expect(result).toEqual([]);
 
-    // Resolving after the timeout has no effect on the caller.
-    neverResolves({ chunks: [chunk()], vectorSearchEnabled: true });
+    jest.useRealTimers();
+  });
+
+  it('actually cancels the underlying fetch on timeout (signal aborted)', async () => {
+    jest.useFakeTimers();
+    let capturedSignal: AbortSignal | undefined;
+    apiPost.mockImplementationOnce(
+      (_path, _body, opts) =>
+        new Promise<never>((_, reject) => {
+          capturedSignal = (opts as { signal?: AbortSignal } | undefined)?.signal;
+          capturedSignal?.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    );
+
+    const promise = retrieve('test');
+    jest.advanceTimersByTime(3001);
+    await promise;
+
+    expect(capturedSignal).toBeDefined();
+    expect(capturedSignal!.aborted).toBe(true);
     jest.useRealTimers();
   });
 });

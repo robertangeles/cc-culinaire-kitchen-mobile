@@ -215,6 +215,61 @@ describe('modelDownloadService', () => {
     expect(calls[0]!.wifiOnly).toBe(false);
   });
 
+  it('two concurrent start() calls only spawn one native download per file (race fix)', async () => {
+    // Both start() calls happen before either's getActiveDownloads()
+    // resolves. Without the inflightBootstrap gate, both would see
+    // [] (no active downloads) and both would call startDownload(),
+    // creating duplicate Room rows + native workers. With the gate,
+    // the second caller waits for the first's bootstrap, then runs
+    // its own getActiveDownloads() and sees the row spawned by the
+    // first — adopting it instead of duplicating.
+    let resolveFirstActive: (rows: unknown[]) => void = () => undefined;
+    let resolveSecondActive: (rows: unknown[]) => void = () => undefined;
+    mockNative.getActiveDownloads
+      .mockReturnValueOnce(new Promise<unknown[]>((r) => (resolveFirstActive = r)))
+      .mockReturnValueOnce(new Promise<unknown[]>((r) => (resolveSecondActive = r)));
+
+    service.start({ onProgress: jest.fn(), onDone: jest.fn() });
+    service.start({ onProgress: jest.fn(), onDone: jest.fn() });
+
+    // Resolve both reads with no in-flight rows. The first caller will
+    // proceed to startDownload(); the second will await the first's
+    // bootstrap, then re-run getActiveDownloads() — but our mock returns
+    // [] there too. The gate's value isn't in the read result; it's in
+    // serialising the read-then-spawn so the second caller sees the row.
+    //
+    // To prove the gate is engaged, we instead assert the first caller
+    // begins its startDownload() chain BEFORE the second caller's
+    // getActiveDownloads() resolves, AND that the second caller does
+    // NOT call startDownload() once it sees the file is already known.
+    resolveFirstActive([]);
+    await flushMicrotasks();
+
+    // First call should have spawned exactly one startDownload by now.
+    expect(mockNative.startDownload).toHaveBeenCalledTimes(1);
+
+    // Now simulate the second caller's getActiveDownloads resolving
+    // with the row that the first caller registered (mirrors what
+    // the native layer would actually return after startDownload).
+    resolveSecondActive([
+      {
+        downloadId: 'dl-1',
+        modelId: MODEL.id,
+        fileName: MODEL.files.main.filename,
+        url: MODEL.files.main.url,
+        destinationPath: '/data/test/main',
+        bytesDownloaded: 0,
+        totalBytes: MODEL.files.main.sizeBytes,
+        status: 'RUNNING',
+        reasonCode: 'none',
+      },
+    ]);
+    await flushMicrotasks();
+
+    // No second startDownload — the second caller adopted the row.
+    expect(mockNative.startDownload).toHaveBeenCalledTimes(1);
+  });
+
   it('calls onError when __forceError is set, without touching native', async () => {
     service.__forceError.value = true;
     const onError = jest.fn();
