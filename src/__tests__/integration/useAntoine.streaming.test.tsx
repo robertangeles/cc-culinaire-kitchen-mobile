@@ -36,9 +36,20 @@ jest.mock('@/services/modelLocator', () => ({
 }));
 
 jest.mock('@/services/promptCacheService', () => ({
-  getActivePrompt: jest.fn(async () => 'CACHED_SERVER_PROMPT'),
-  refreshAndCache: jest.fn(async () => 'CACHED_SERVER_PROMPT'),
+  getActivePrompt: jest.fn(async () => ({
+    body: 'CACHED_SERVER_PROMPT',
+    resolvedSlug: 'antoine-system-prompt',
+    isFallback: false,
+  })),
+  refreshAndCache: jest.fn(async () => ({
+    body: 'CACHED_SERVER_PROMPT',
+    resolvedSlug: 'antoine-system-prompt',
+    isFallback: false,
+  })),
   getCachedVersion: jest.fn(async () => 1),
+  slugForLanguage: jest.fn((lang: string) =>
+    lang === 'en' ? 'antoine-system-prompt' : `antoine-system-prompt-${lang}`,
+  ),
 }));
 
 jest.mock('@/services/ragService', () => {

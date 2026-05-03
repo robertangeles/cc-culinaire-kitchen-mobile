@@ -1,0 +1,1 @@
+ALTER TABLE `ckm_conversation` ADD `language` text;

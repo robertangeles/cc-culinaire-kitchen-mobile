@@ -11,12 +11,15 @@ import { theme } from '@/constants/theme';
 import { useAntoine } from '@/hooks/useAntoine';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversation } from '@/hooks/useConversation';
+import { useI18nStore } from '@/store/i18nStore';
 import { useModelStore } from '@/store/modelStore';
 
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
 import { ChatList } from './ChatList';
 import { HistorySheet } from './HistorySheet';
+import { LanguagePickerSheet } from './LanguagePickerSheet';
+import { PartialLanguageBanner } from './PartialLanguageBanner';
 import {
   GlobeIcon,
   HistoryIcon,
@@ -82,6 +85,8 @@ export function ChatScreen() {
 
   const [kebabOpen, setKebabOpen] = useState(false);
   const historyRef = useRef<BottomSheetModal>(null);
+  const languageRef = useRef<BottomSheetModal>(null);
+  const language = useI18nStore((s) => s.language);
 
   const onSend = useCallback((text: string) => void send(text), [send]);
 
@@ -109,8 +114,8 @@ export function ChatScreen() {
       id: 'lang',
       label: t('chat.language'),
       Icon: GlobeIcon,
-      onPress: () => undefined,
-      trailing: 'EN',
+      onPress: () => languageRef.current?.present(),
+      trailing: language.toUpperCase(),
     },
     {
       id: 'settings',
@@ -139,6 +144,8 @@ export function ChatScreen() {
         onPressMore={() => setKebabOpen(true)}
       />
 
+      <PartialLanguageBanner />
+
       <ChatList messages={messages} />
 
       <ChatComposer onSend={onSend} />
@@ -152,6 +159,8 @@ export function ChatScreen() {
           void setActive(id);
         }}
       />
+
+      <LanguagePickerSheet ref={languageRef} />
 
       <KebabMenu visible={kebabOpen} onClose={() => setKebabOpen(false)} items={items} />
     </Animated.View>

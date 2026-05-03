@@ -6,10 +6,11 @@ import {
   saveSystemPromptKV,
   wasKvHandledThisSession,
 } from '@/services/kvSessionService';
-import { getActivePrompt } from '@/services/promptCacheService';
+import { getActivePrompt, slugForLanguage } from '@/services/promptCacheService';
 import { formatRagContext, retrieve, type RagChunk } from '@/services/ragService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+import { useI18nStore } from '@/store/i18nStore';
 import { useModelStore } from '@/store/modelStore';
 import type { Message } from '@/types/chat';
 import type { InferenceMessage } from '@/types/inference';
@@ -125,7 +126,19 @@ export function useAntoine() {
           : isFirstRagFetch
             ? retrieve(trimmedContent, { limit: 2 })
             : Promise.resolve(cachedChunks);
-        const [systemPrompt, ragChunks] = await Promise.all([getActivePrompt(), ragPromise]);
+        // Derive the prompt slug from the conversation's per-row
+        // language override, falling back to the user's global
+        // i18nStore.language when the row's language is null.
+        const conv = useConversationStore
+          .getState()
+          .conversations.find((c) => c.id === conversationId);
+        const effectiveLanguage = conv?.language ?? useI18nStore.getState().language;
+        const promptSlug = slugForLanguage(effectiveLanguage);
+        const [promptResolution, ragChunks] = await Promise.all([
+          getActivePrompt(promptSlug),
+          ragPromise,
+        ]);
+        const systemPrompt = promptResolution.body;
         if (!skipRag && isFirstRagFetch && ragChunks.length > 0) {
           // Freeze the first non-empty result for the rest of this
           // conversation. We deliberately skip caching empty arrays so

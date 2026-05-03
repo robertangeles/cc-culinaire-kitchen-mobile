@@ -94,3 +94,37 @@ Don't write `${count} message${count !== 1 ? 's' : ''}` and call `t()` on the re
 - **Conditional translations:** don't `t(condition ? 'a' : 'b')` — use a single key with a variable.
 - **Inline JSX:** never `t('chat.welcome <strong>{{name}}</strong>')` — translators will break the markup. Use `<Trans>` from `react-i18next` for inline elements.
 - **Translating data:** model names, file paths, version strings, etc. stay literal. Only **user-facing UI copy** is translated.
+
+## Adding a new language
+
+Every language we add ships **all eight namespaces** translated, reviewed by a fluent native speaker, in a single PR. We do not ship partial UI bundles. The partial-language banner exists for the case where the system PROMPT (Antoine's voice) hasn't been authored yet — never for missing UI chrome. Established when FR landed on 2026-05-03 with a French speaker reviewing in real-time, after a placeholder-only fr.json was rejected as user-hostile.
+
+### Checklist for each new language
+
+1. **Native-speaker reviewer in the loop.** A fluent speaker — ideally with culinary domain familiarity — reviews every string before merge. Not an LLM. Not "machine translation, we'll fix later." Real-time review during translation is preferred since it catches register and idiom issues at write time instead of bug time.
+
+2. **Translate every namespace.** All eight: `auth`, `chat`, `settings`, `errors`, `actions`, `chef`, `welcome`, `onboarding`, plus any newer namespace added since this list (e.g. `foodSafety`). Do not leave English fallbacks in the new bundle's `_meta` comment as a hedge — if a string isn't ready, the language isn't ready.
+
+3. **Preserve interpolation + `<Trans>` slots verbatim.** `{{name}}`, `{{count}}`, `<termsLink>...</termsLink>`, `<emailEm>{{email}}</emailEm>`, `<script>...</script>` — these are structural and must appear in the translation in the same form. The component reads them; translation only changes the text inside or around them.
+
+4. **Apply the target language's typographic conventions.** This is the level of polish a native speaker notices and a non-native speaker doesn't. Examples from FR:
+   - **Decimal separator:** `5,9` not `5.9`
+   - **Unit names:** `Go` (gigaoctets) not `GB`
+   - **Non-breaking space before `?`, `!`, `:`, `%`, `«»`** per French typography rules
+   - Other languages have their own conventions (German capitalises every noun; Spanish uses inverted opening punctuation; Japanese has full-width characters). Ask the reviewer.
+
+5. **Keep brand marks literal.** "Antoine", "CulinAIre Kitchen", "LITE", and the "Kitchen" Caveat-script wordmark stay verbatim in every bundle. They are names, not copy.
+
+6. **Update `_meta.$comment`** in the new bundle to record: who reviewed, when, what scope. Not a guarantee, just a breadcrumb for the next person who opens the file.
+
+7. **Update `SUPPORTED_LANGUAGES`** in `src/store/i18nStore.ts` and add the resource import in `src/i18n/index.ts`. The picker UI auto-extends; no other UI changes needed for chrome.
+
+8. **`LANGUAGE_DISPLAY` row** in `src/components/chat/LanguagePickerSheet.tsx`. Native form + English form: `it: { native: 'Italiano', english: 'Italian' }`.
+
+9. **Web side: per-language Antoine prompt.** Mobile chrome translation is independent of the system prompt, but the prompt must be authored + reviewer-signed + eval-passed before the language goes into the production `languages_enabled` feature flag. See `wiki/synthesis/in-flight.md` and `../cc-culinaire-shared-context/mobile-needs.md` for the cross-project handoff. Until the prompt lands, the language stays dev-only via the `__DEV__` picker override; it does not appear to production users.
+
+10. **End-to-end device verification.** Walk every screen in the new language: welcome carousel, sign-up + sign-in + verify-email + forgot-password + reset-password + MFA, food-safety ack, onboarding download, chat (greeting, composer, kebab menu, history sheet, partial-language banner if forcing a missing prompt), settings (your kitchen, model states, cellular dialog). String overflow, line breaks, and missing-glyph fallbacks all surface here, not in code review.
+
+### What "good" looks like — FR is the reference
+
+When in doubt about how thoroughly to translate, scope, or polish: open `src/locales/fr.json` and match that bar. Look at the chef-line idioms ("Bon retour en cuisine.", "Pas de signal dans la chambre froide ? Toujours des réponses."), the typographic conventions, and the `_meta` comment. That's the standard.

@@ -243,8 +243,20 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
             <Trans
               i18nKey="auth.termsAndPrivacy"
               components={{
-                termsLink: <Text style={styles.termsLink} />,
-                privacyLink: <Text style={styles.termsLink} />,
+                termsLink: (
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => router.push('/(legal)/terms' as never)}
+                    accessibilityRole="link"
+                  />
+                ),
+                privacyLink: (
+                  <Text
+                    style={styles.termsLink}
+                    onPress={() => router.push('/(legal)/privacy' as never)}
+                    accessibilityRole="link"
+                  />
+                ),
               }}
             />
           </Text>

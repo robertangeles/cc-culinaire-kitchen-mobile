@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
 
 import { STORAGE_KEYS } from '@/constants/config';
+import { useFoodSafetyStore } from '@/store/foodSafetyStore';
 import type { AuthUser } from '@/types/auth';
 
 /**
@@ -66,5 +67,9 @@ export const useAuthStore = create<AuthStore>((set) => ({
       SecureStore.deleteItemAsync(STORAGE_KEYS.authUser),
     ]);
     set({ user: null, token: null, refreshToken: null });
+    // Reset the per-session food-safety ack so the next sign-in sees
+    // the screen fresh. Without this, signing out + signing back in
+    // within the same JS lifetime would skip the ack screen.
+    useFoodSafetyStore.getState().resetAck();
   },
 }));

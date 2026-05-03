@@ -31,14 +31,17 @@ import migrations from '@/db/migrations/migrations';
 // to layer on persisted/device-detected language.
 import { applyDeviceLocaleIfStoreEmpty } from '@/i18n';
 import { configureGoogleSignIn } from '@/services/googleSignIn';
+import { refreshFeatureFlags } from '@/services/featureFlagsService';
 import { ensureContext } from '@/services/inferenceService';
 import { loadSystemPromptKV, markKvHandled } from '@/services/kvSessionService';
 import {
   getActivePrompt,
   refreshAndCache as refreshAntoinePrompt,
+  slugForLanguage,
 } from '@/services/promptCacheService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+import { isFoodSafetyAckRequired, useFoodSafetyStore } from '@/store/foodSafetyStore';
 import { useModelStore } from '@/store/modelStore';
 
 // Configure Google Sign-In at module load (idempotent, safe to call before
@@ -63,15 +66,25 @@ function RouteGuard() {
   // returning user with the model already downloaded would see the
   // "Get Antoine · 5.9 GB" CTA every launch.
   const isModelActive = useModelStore((s) => s.isActive);
+  // Food-safety acknowledgement gate. Per-session, in-memory only —
+  // resets on cold launch + sign-out. Reinforces what Antoine is (and
+  // isn't) at every entry to chat. See foodSafetyStore for rationale.
+  const ackedThisSession = useFoodSafetyStore((s) => s.ackedThisSession);
 
   useEffect(() => {
     if (!isHydrated) return;
+    // (legal) is reachable in every auth state — Terms + Privacy must be
+    // readable before sign-up (ToS acceptance) AND after. Short-circuit
+    // before any of the auth/onboarding/food-safety redirects kick in.
+    if (segments[0] === '(legal)') return;
     const inAuthFlow =
       segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
+    const onFoodSafety = segments[0] === '(food-safety)';
     const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
 
     if (!user) {
       // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
+      // Also kick out of (food-safety) — that gate is post-auth only.
       if (!inAuthFlow) router.replace('/(welcome)');
       return;
     }
@@ -83,9 +96,23 @@ function RouteGuard() {
       return;
     }
 
-    // Fully verified: kick out of welcome + (auth) screens (these only make
-    // sense when logged out or unverified).
-    if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
+    // Verified but not yet acked food-safety this session: force the
+    // ack screen. Skip when already on it to avoid a redirect loop.
+    const ackRequired = isFoodSafetyAckRequired({ ackedThisSession });
+    if (ackRequired) {
+      // expo-router's typed-routes cache doesn't pick up new route groups
+      // until the dev server regenerates types — cast as never until then.
+      if (!onFoodSafety) router.replace('/(food-safety)' as never);
+      return;
+    }
+
+    // Fully verified + acked: kick out of welcome + (auth) + (food-safety)
+    // screens (these only make sense earlier in the flow).
+    if (
+      segments[0] === '(welcome)' ||
+      segments[0] === '(auth)' ||
+      segments[0] === '(food-safety)'
+    ) {
       router.replace('/(tabs)/chat');
       return;
     }
@@ -97,7 +124,7 @@ function RouteGuard() {
     if (segments[0] === '(onboarding)' && isModelActive) {
       router.replace('/(tabs)/chat');
     }
-  }, [user, isHydrated, segments, router, isModelActive]);
+  }, [user, isHydrated, segments, router, isModelActive, ackedThisSession]);
 
   return null;
 }
@@ -133,7 +160,28 @@ export default function RootLayout() {
     // Boot-time prompt refresh. Best-effort — if the user is offline the
     // cached prompt (or the baked-in fallback) is used by the next chat
     // message via getActivePrompt(). Never blocks app launch.
-    void refreshAntoinePrompt().catch(() => undefined);
+    //
+    // v1.2: refresh both the EN base slug AND the user's currently
+    // selected language (read from i18nStore once it's hydrated). If the
+    // selected language hasn't been authored on the web side, the fetch
+    // 404s and promptCacheService marks it `not_found` so the next chat
+    // read falls back to EN with a partial-language flag.
+    void (async () => {
+      await refreshAntoinePrompt().catch(() => undefined);
+      // Wait briefly for i18nStore hydration (synchronous in tests, ~ms
+      // on device). If not hydrated by the time we kick off, we still
+      // refresh the default-language slug, which is fine.
+      const { useI18nStore } = await import('@/store/i18nStore');
+      const lang = useI18nStore.getState().language;
+      const langSlug = slugForLanguage(lang);
+      if (langSlug !== slugForLanguage('en')) {
+        await refreshAntoinePrompt(langSlug).catch(() => undefined);
+      }
+    })();
+    // Boot-time feature-flag refresh. Best-effort — picker reads the
+    // cached value, so a transient failure here just delays new-language
+    // visibility by one cold launch.
+    void refreshFeatureFlags().catch(() => undefined);
     // i18n boot effect: hydrate the language store from SecureStore, then
     // (only if no persisted language) attempt to detect from device locale.
     // Per Eng review D2 Option B: i18next initialized with EN at module
@@ -162,7 +210,7 @@ export default function RootLayout() {
     void (async () => {
       try {
         const ctx = await ensureContext();
-        const prompt = await getActivePrompt();
+        const { body: prompt } = await getActivePrompt();
         const warmed = await loadSystemPromptKV(ctx, prompt);
         if (warmed) {
           markKvHandled();
