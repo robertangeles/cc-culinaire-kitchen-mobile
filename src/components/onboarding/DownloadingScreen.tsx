@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,6 +35,7 @@ const TIP_CADENCE_MS = 4_000;
  * onComplete fires when progress reaches 1 — parent routes to chat.
  */
 export function DownloadingScreen({ progress, onMount, onComplete }: DownloadingScreenProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { value: tip, index: tipIndex } = useRotatingText(COOKING_TIPS, TIP_CADENCE_MS);
   const wifiOnly = useModelStore((s) => s.wifiOnly);
@@ -63,10 +65,9 @@ export function DownloadingScreen({ progress, onMount, onComplete }: Downloading
         <BrandGlyph size={280} />
       </View>
 
-      <Text style={styles.title}>{ASSISTANT_NAME} is moving in.</Text>
+      <Text style={styles.title}>{t('chef.movingIn', { assistantName: ASSISTANT_NAME })}</Text>
       <Text style={styles.body}>
-        Downloading once, then everything happens on your phone — no internet needed to cook with{' '}
-        {ASSISTANT_NAME}.
+        {t('chef.downloadingBody', { assistantName: ASSISTANT_NAME })}
       </Text>
 
       <View style={styles.spacer} />
@@ -93,7 +94,7 @@ export function DownloadingScreen({ progress, onMount, onComplete }: Downloading
           <Text style={styles.progressLabel}>{pct}%</Text>
           <View style={styles.networkBadge}>
             <Text style={styles.networkBadgeText}>
-              {wifiOnly ? 'Wi-Fi only' : 'Cellular allowed'}
+              {wifiOnly ? t('chef.wifiOnly') : t('chef.cellularAllowed')}
             </Text>
           </View>
         </View>

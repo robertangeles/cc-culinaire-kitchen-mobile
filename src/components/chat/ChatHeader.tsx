@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BrandGlyph } from '@/components/ui/BrandGlyph';
@@ -12,6 +13,7 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ modelReady, onPressDownload, onPressMore }: ChatHeaderProps) {
+  const { t } = useTranslation();
   return (
     <View style={styles.row}>
       <View style={styles.brand}>
@@ -22,13 +24,15 @@ export function ChatHeader({ modelReady, onPressDownload, onPressMore }: ChatHea
             onPress={modelReady ? undefined : onPressDownload}
             style={[styles.pill, modelReady ? styles.pillReady : styles.pillNeedsModel]}
             accessibilityRole={modelReady ? undefined : 'button'}
-            accessibilityLabel={modelReady ? 'Antoine is loaded' : 'Download Antoine'}
+            accessibilityLabel={
+              modelReady ? t('chat.headerModelReady') : t('chat.headerDownloadModel')
+            }
           >
             {!modelReady ? <DownloadIcon size={11} color={palette.copperDeep} /> : null}
             <Text
               style={[styles.pillText, modelReady ? styles.pillTextReady : styles.pillTextNeed]}
             >
-              {modelReady ? 'Loaded · Antoine' : 'No model · Download'}
+              {modelReady ? t('chat.headerLoaded') : t('chat.headerNoModel')}
             </Text>
           </Pressable>
         </View>
@@ -37,7 +41,7 @@ export function ChatHeader({ modelReady, onPressDownload, onPressMore }: ChatHea
         onPress={onPressMore}
         style={styles.more}
         accessibilityRole="button"
-        accessibilityLabel="More actions"
+        accessibilityLabel={t('chat.moreActions')}
         hitSlop={10}
       >
         <MoreIcon size={22} color={palette.ink} />

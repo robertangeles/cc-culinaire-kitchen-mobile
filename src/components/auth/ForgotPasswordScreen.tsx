@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,6 +12,7 @@ import { fonts, palette, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 
 export function ForgotPasswordScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { requestPasswordReset, isLoading, error } = useAuth();
@@ -55,15 +57,18 @@ export function ForgotPasswordScreen() {
 
         {submitted ? (
           <>
-            <Text style={styles.tagline}>Check your inbox.</Text>
+            <Text style={styles.tagline}>{t('auth.checkInboxTitle')}</Text>
             <Text style={styles.body}>
-              If an account exists at <Text style={styles.emailEm}>{email}</Text>, a reset link is
-              on its way. Tap the link to set a new password.
+              <Trans
+                i18nKey="auth.checkInboxBody"
+                values={{ email }}
+                components={{ emailEm: <Text style={styles.emailEm} /> }}
+              />
             </Text>
             <View style={styles.spacer} />
             <View style={styles.ctaBlock}>
               <CopperButton onPress={() => router.replace('/(auth)/login')}>
-                Back to sign in
+                {t('auth.backToSignIn')}
               </CopperButton>
               <GhostButton
                 onPress={() => {
@@ -71,22 +76,20 @@ export function ForgotPasswordScreen() {
                   setEmail('');
                 }}
               >
-                Try a different email
+                {t('auth.tryDifferentEmail')}
               </GhostButton>
             </View>
           </>
         ) : (
           <>
-            <Text style={styles.tagline}>Forgot your password?</Text>
-            <Text style={styles.body}>
-              Enter your email and we&apos;ll send you a link to set a new one.
-            </Text>
+            <Text style={styles.tagline}>{t('auth.forgotPasswordTitle')}</Text>
+            <Text style={styles.body}>{t('auth.forgotPasswordBody')}</Text>
             <View style={styles.fields}>
               <TextField
-                label="Email"
+                label={t('auth.emailLabel')}
                 value={email}
                 onChange={setEmail}
-                placeholder="chef@kitchen.co"
+                placeholder={t('auth.forgotPasswordPlaceholder')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
@@ -96,10 +99,10 @@ export function ForgotPasswordScreen() {
             <View style={styles.spacer} />
             <View style={styles.ctaBlock}>
               <CopperButton onPress={submit} disabled={!canSubmit || isLoading}>
-                Send reset link
+                {t('auth.sendResetLink')}
               </CopperButton>
               <GhostButton onPress={() => router.replace('/(auth)/login')}>
-                Back to sign in
+                {t('auth.backToSignIn')}
               </GhostButton>
             </View>
           </>

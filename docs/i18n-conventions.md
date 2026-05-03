@@ -17,18 +17,22 @@ Decided in /plan-eng-review (D5) on 2026-05-03. Switching styles later means re-
 
 ## Top-level namespaces
 
-The skeleton in `src/locales/en.json` defines the canonical six. Everything goes inside one of these — don't add new top-levels without team agreement.
+The skeleton in `src/locales/en.json` defines the canonical eight. Everything goes inside one of these — don't add new top-levels without team agreement.
 
-| Namespace  | What lives here                                                | Examples                                                              |
-| ---------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `auth`     | Login, register, MFA, verify-email, forgot/reset password      | `auth.signIn`, `auth.passwordRequired`, `auth.verifyEmailHeader`      |
-| `chat`     | Chat screen, composer, bubble, streaming UI, history sheet     | `chat.composerPlaceholder`, `chat.modelMissing`, `chat.greeting`      |
-| `settings` | Settings tab, kebab menu, model management, language picker    | `settings.title`, `settings.language`, `settings.signOut`             |
-| `errors`   | User-facing error messages from any layer                      | `errors.networkOffline`, `errors.modelLoadFailed`, `errors.tryAgain`  |
-| `actions`  | Generic button labels reused across screens                    | `actions.retry`, `actions.cancel`, `actions.save`, `actions.continue` |
-| `chef`     | Antoine-specific UX copy — persona, model loading, brand voice | `chef.loaded`, `chef.warming`, `chef.streaming`                       |
+| Namespace    | What lives here                                                                                  | Examples                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `auth`       | Login, register, MFA, verify-email, forgot/reset password                                        | `auth.signInButton`, `auth.passwordLabel`, `auth.verifyTitle`   |
+| `chat`       | Chat screen, composer, bubble, streaming UI, history sheet, kebab menu                           | `chat.composerPlaceholder`, `chat.greeting`, `chat.streaming`   |
+| `settings`   | Settings tab, model management, Wi-Fi toggle                                                     | `settings.title`, `settings.wifiOnly`, `settings.signOutButton` |
+| `errors`     | User-facing error messages from any layer (currently empty; populated as error paths surface UI) | `errors.networkOffline`, `errors.modelLoadFailed`               |
+| `actions`    | Generic button labels reused across screens                                                      | `actions.cancel`, `actions.retry`, `actions.save`               |
+| `chef`       | Antoine-specific UX copy — persona, model-load lifecycle, download messaging                     | `chef.movingIn`, `chef.downloadingBody`                         |
+| `welcome`    | Pre-auth welcome carousel (the 3-slide intro shown before sign-up)                               | `welcome.slide1Title`, `welcome.getStarted`                     |
+| `onboarding` | Post-auth onboarding flow (model-download screen with privacy callouts)                          | `onboarding.welcomeMessage`, `onboarding.privacy1Label`         |
 
 If a string genuinely doesn't fit any of these, it's a sign the namespace list needs to grow. Surface it in the PR for discussion rather than inventing a one-off namespace.
+
+**Brand marks are NOT translated.** Names ("Antoine"), product marks ("CulinAIre", "CulinAIre Kitchen", "LITE"), the "Kitchen" Caveat-script wordmark, and quantitative literals tied to product facts ("5.9 GB" in download buttons referring to the model file size) stay as literals in source. Only translatable copy goes through `t()`.
 
 ## Naming inside a namespace
 

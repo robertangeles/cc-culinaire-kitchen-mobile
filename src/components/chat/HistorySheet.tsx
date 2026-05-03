@@ -5,6 +5,7 @@ import {
   BottomSheetModal,
 } from '@gorhom/bottom-sheet';
 import { forwardRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { fonts, palette, spacing } from '@/constants/theme';
@@ -36,7 +37,9 @@ export const HistorySheet = forwardRef<BottomSheetModal, HistorySheetProps>(func
   { conversations, activeId, onPick },
   ref,
 ) {
+  const { t } = useTranslation();
   const snapPoints = useMemo(() => ['50%', '90%'], []);
+  const untitled = t('chat.untitledConversation');
 
   return (
     <BottomSheetModal
@@ -47,11 +50,11 @@ export const HistorySheet = forwardRef<BottomSheetModal, HistorySheetProps>(func
       handleIndicatorStyle={styles.handle}
     >
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>HISTORY</Text>
+        <Text style={styles.eyebrow}>{t('chat.historyTitle')}</Text>
       </View>
       {conversations.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.empty}>No conversations yet. Start one from the chat screen.</Text>
+          <Text style={styles.empty}>{t('chat.emptyHistory')}</Text>
         </View>
       ) : (
         <BottomSheetFlatList
@@ -63,11 +66,11 @@ export const HistorySheet = forwardRef<BottomSheetModal, HistorySheetProps>(func
               onPress={() => onPick(item.id)}
               style={[styles.row, activeId === item.id && styles.rowActive]}
               accessibilityRole="button"
-              accessibilityLabel={item.title ?? 'Untitled conversation'}
+              accessibilityLabel={item.title ?? untitled}
             >
               <View style={styles.rowBody}>
                 <Text style={styles.title} numberOfLines={1}>
-                  {item.title ?? 'Untitled conversation'}
+                  {item.title ?? untitled}
                 </Text>
                 <Text style={styles.meta}>{relativeTime(item.updatedAt)}</Text>
               </View>

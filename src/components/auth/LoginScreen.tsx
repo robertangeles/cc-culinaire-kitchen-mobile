@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('signin');
@@ -122,7 +124,7 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
         });
         return;
       }
-      setGoogleError(e instanceof Error ? e.message : 'Google sign-in failed.');
+      setGoogleError(e instanceof Error ? e.message : t('auth.googleError'));
     }
   };
 
@@ -144,9 +146,7 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
         </View>
 
         <Text style={styles.tagline}>
-          {mode === 'signin'
-            ? 'Welcome back to the line.'
-            : 'A line that runs itself once you let it.'}
+          {mode === 'signin' ? t('auth.signInTagline') : t('auth.registerTagline')}
         </Text>
 
         <View style={styles.segment}>
@@ -164,7 +164,7 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
                   mode === m ? styles.segmentLabelActive : styles.segmentLabelInactive,
                 ]}
               >
-                {m === 'signin' ? 'Sign in' : 'Register'}
+                {m === 'signin' ? t('auth.signInLabel') : t('auth.registerLabel')}
               </Text>
             </Pressable>
           ))}
@@ -173,33 +173,39 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
         <View style={styles.fields}>
           {mode === 'register' ? (
             <TextField
-              label="Name"
+              label={t('auth.nameLabel')}
               value={name}
               onChange={setName}
-              placeholder="Marco Reyes"
+              placeholder={t('auth.namePlaceholder')}
               autoCapitalize="words"
               autoComplete="name"
             />
           ) : null}
           <TextField
-            label="Email"
+            label={t('auth.emailLabel')}
             value={email}
             onChange={setEmail}
-            placeholder="chef@kitchen.co"
+            placeholder={t('auth.emailPlaceholder')}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
           />
           <TextField
-            label="Password"
+            label={t('auth.passwordLabel')}
             value={password}
             onChange={setPassword}
-            placeholder={mode === 'register' ? 'At least 6 characters' : '••••••••'}
+            placeholder={
+              mode === 'register'
+                ? t('auth.passwordRegisterPlaceholder')
+                : t('auth.passwordSignInPlaceholder')
+            }
             secureTextEntry={!showPw}
             autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
             trailing={
               <Pressable onPress={() => setShowPw((v) => !v)} hitSlop={8}>
-                <Text style={styles.showHide}>{showPw ? 'Hide' : 'Show'}</Text>
+                <Text style={styles.showHide}>
+                  {showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+                </Text>
               </Pressable>
             }
           />
@@ -208,7 +214,7 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
               style={styles.forgotRow}
               onPress={() => router.push('/(auth)/forgot-password')}
             >
-              <Text style={styles.forgot}>Forgot password</Text>
+              <Text style={styles.forgot}>{t('auth.forgotPassword')}</Text>
             </Pressable>
           ) : null}
         </View>
@@ -220,22 +226,27 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
 
         <View style={styles.ctaBlock}>
           <CopperButton onPress={submit} disabled={!canSubmit || isLoading}>
-            {mode === 'signin' ? 'Sign in' : 'Create account'}
+            {mode === 'signin' ? t('auth.signInButton') : t('auth.createAccountButton')}
           </CopperButton>
 
           <View style={styles.divider}>
             <View style={styles.dividerRule} />
-            <Text style={styles.dividerLabel}>OR</Text>
+            <Text style={styles.dividerLabel}>{t('auth.dividerLabel')}</Text>
             <View style={styles.dividerRule} />
           </View>
 
           <GhostButton onPress={google} leading={<GoogleMark />}>
-            Continue with Google
+            {t('auth.googleButton')}
           </GhostButton>
 
           <Text style={styles.terms}>
-            By continuing you agree to the <Text style={styles.termsLink}>Terms</Text> and{' '}
-            <Text style={styles.termsLink}>Kitchen privacy notice</Text>.
+            <Trans
+              i18nKey="auth.termsAndPrivacy"
+              components={{
+                termsLink: <Text style={styles.termsLink} />,
+                privacyLink: <Text style={styles.termsLink} />,
+              }}
+            />
           </Text>
         </View>
       </ScrollView>

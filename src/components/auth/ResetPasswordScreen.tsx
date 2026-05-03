@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -28,6 +29,7 @@ interface ResetPasswordScreenProps {
 }
 
 export function ResetPasswordScreen({ initialToken }: ResetPasswordScreenProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { submitPasswordReset, isLoading, error } = useAuth();
@@ -73,39 +75,40 @@ export function ResetPasswordScreen({ initialToken }: ResetPasswordScreenProps) 
 
         {done ? (
           <>
-            <Text style={styles.tagline}>Password reset.</Text>
-            <Text style={styles.body}>You can sign in with your new password now.</Text>
+            <Text style={styles.tagline}>{t('auth.resetPasswordSuccess')}</Text>
+            <Text style={styles.body}>{t('auth.resetPasswordSuccessBody')}</Text>
             <View style={styles.spacer} />
             <View style={styles.ctaBlock}>
-              <CopperButton onPress={() => router.replace('/(auth)/login')}>Sign in</CopperButton>
+              <CopperButton onPress={() => router.replace('/(auth)/login')}>
+                {t('auth.signInButton')}
+              </CopperButton>
             </View>
           </>
         ) : (
           <>
-            <Text style={styles.tagline}>Set a new password.</Text>
-            <Text style={styles.body}>
-              Paste the code from the reset email, then choose a new password (at least 8
-              characters).
-            </Text>
+            <Text style={styles.tagline}>{t('auth.resetPasswordTitle')}</Text>
+            <Text style={styles.body}>{t('auth.resetPasswordBody')}</Text>
             <View style={styles.fields}>
               <TextField
-                label="Reset code"
+                label={t('auth.resetCodeLabel')}
                 value={token}
                 onChange={setToken}
-                placeholder="From the email link"
+                placeholder={t('auth.resetCodePlaceholder')}
                 autoCapitalize="none"
                 autoComplete="one-time-code"
               />
               <TextField
-                label="New password"
+                label={t('auth.newPasswordLabel')}
                 value={password}
                 onChange={setPassword}
-                placeholder="At least 8 characters"
+                placeholder={t('auth.newPasswordPlaceholder')}
                 secureTextEntry={!showPw}
                 autoComplete="new-password"
                 trailing={
                   <Pressable onPress={() => setShowPw((v) => !v)} hitSlop={8}>
-                    <Text style={styles.showHide}>{showPw ? 'Hide' : 'Show'}</Text>
+                    <Text style={styles.showHide}>
+                      {showPw ? t('auth.hidePassword') : t('auth.showPassword')}
+                    </Text>
                   </Pressable>
                 }
               />
@@ -114,9 +117,11 @@ export function ResetPasswordScreen({ initialToken }: ResetPasswordScreenProps) 
             <View style={styles.spacer} />
             <View style={styles.ctaBlock}>
               <CopperButton onPress={submit} disabled={!canSubmit || isLoading}>
-                Reset password
+                {t('auth.resetPasswordButton')}
               </CopperButton>
-              <GhostButton onPress={() => router.replace('/(auth)/login')}>Cancel</GhostButton>
+              <GhostButton onPress={() => router.replace('/(auth)/login')}>
+                {t('actions.cancel')}
+              </GhostButton>
             </View>
           </>
         )}

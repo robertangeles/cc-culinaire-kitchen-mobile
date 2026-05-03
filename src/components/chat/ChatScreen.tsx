@@ -2,6 +2,7 @@ import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ import {
 } from './KebabMenu';
 
 export function ChatScreen() {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isModelActive = useModelStore((s) => s.isActive);
@@ -86,40 +88,40 @@ export function ChatScreen() {
   const items: KebabItem[] = [
     {
       id: 'new',
-      label: 'New chat',
+      label: t('chat.newChat'),
       Icon: NewChatIcon,
       onPress: () => void newConversation(),
     },
     {
       id: 'history',
-      label: 'History',
+      label: t('chat.history'),
       Icon: HistoryIcon,
       onPress: () => historyRef.current?.present(),
     },
     {
       id: 'clear',
-      label: 'Clear conversation',
+      label: t('chat.clearConversation'),
       Icon: TrashIcon,
       onPress: () => void clearActive(),
     },
     { divider: true },
     {
       id: 'lang',
-      label: 'Language',
+      label: t('chat.language'),
       Icon: GlobeIcon,
       onPress: () => undefined,
       trailing: 'EN',
     },
     {
       id: 'settings',
-      label: 'Settings',
+      label: t('chat.settings'),
       Icon: SettingsGearIcon,
       onPress: () => router.push('/(tabs)/settings'),
     },
     { divider: true },
     {
       id: 'signout',
-      label: 'Sign out',
+      label: t('chat.signOut'),
       Icon: SignOutIcon,
       onPress: async () => {
         await signOut();

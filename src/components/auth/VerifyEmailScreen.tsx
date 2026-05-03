@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
+import { Trans, useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +26,7 @@ interface VerifyEmailScreenProps {
  *     Always succeeds (anti-enumeration on the backend).
  */
 export function VerifyEmailScreen({ email }: VerifyEmailScreenProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { refreshUser, resendEmailVerification, signOut, isLoading, error } = useAuth();
@@ -98,10 +100,13 @@ export function VerifyEmailScreen({ email }: VerifyEmailScreenProps) {
           <BrandGlyph size={140} />
         </View>
 
-        <Text style={styles.tagline}>Verify your email.</Text>
+        <Text style={styles.tagline}>{t('auth.verifyTitle')}</Text>
         <Text style={styles.body}>
-          We sent a verification link to <Text style={styles.emailEm}>{email}</Text>. Open it from
-          your inbox to activate your account.
+          <Trans
+            i18nKey="auth.verifyBody"
+            values={{ email }}
+            components={{ emailEm: <Text style={styles.emailEm} /> }}
+          />
         </Text>
 
         {hint ? <Text style={styles.hint}>{hint}</Text> : null}
@@ -111,13 +116,13 @@ export function VerifyEmailScreen({ email }: VerifyEmailScreenProps) {
 
         <View style={styles.ctaBlock}>
           <CopperButton onPress={continueClick} disabled={isLoading}>
-            I verified, continue
+            {t('auth.verifyButton')}
           </CopperButton>
           <GhostButton onPress={resend} disabled={isLoading}>
-            Resend email
+            {t('auth.resendEmailButton')}
           </GhostButton>
           <GhostButton onPress={useDifferentAccount} disabled={isLoading}>
-            Use a different account
+            {t('auth.useDifferentAccount')}
           </GhostButton>
         </View>
       </ScrollView>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
@@ -26,6 +27,7 @@ const HELLO_CADENCE_MS = 3_500;
  * users with single-word display names still resolve cleanly).
  */
 export function ChatGreeting() {
+  const { t } = useTranslation();
   const userName = useAuthStore((s) => s.user?.userName);
   const firstName = (userName ?? '').trim().split(/\s+/)[0] || 'chef';
 
@@ -49,7 +51,7 @@ export function ChatGreeting() {
         <Text style={styles.name}>, {firstName}</Text>
       </View>
 
-      <Text style={styles.subtitle}>How can I help you today?</Text>
+      <Text style={styles.subtitle}>{t('chat.greeting')}</Text>
     </View>
   );
 }

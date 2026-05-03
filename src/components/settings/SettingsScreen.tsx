@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
@@ -14,6 +15,7 @@ import { useModelDownload } from '@/hooks/useModelDownload';
 import { useModelStore } from '@/store/modelStore';
 
 export function SettingsScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -42,20 +44,16 @@ export function SettingsScreen() {
       void setWifiOnly(true);
       return;
     }
-    Alert.alert(
-      'Allow cellular downloads?',
-      'Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Allow cellular',
-          style: 'destructive',
-          onPress: () => {
-            void setWifiOnly(false);
-          },
+    Alert.alert(t('settings.cellularWarning'), t('settings.cellularWarningBody'), [
+      { text: t('settings.cellularCancel'), style: 'cancel' },
+      {
+        text: t('settings.cellularAllow'),
+        style: 'destructive',
+        onPress: () => {
+          void setWifiOnly(false);
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const onSignOut = async () => {
@@ -72,12 +70,12 @@ export function SettingsScreen() {
       ]}
       showsVerticalScrollIndicator={false}
     >
-      <Eyebrow>Settings</Eyebrow>
-      <Text style={styles.h1}>Your kitchen.</Text>
+      <Eyebrow>{t('settings.title')}</Eyebrow>
+      <Text style={styles.h1}>{t('settings.kitchen')}</Text>
 
       <View style={styles.sectionGap} />
 
-      <Eyebrow>Account</Eyebrow>
+      <Eyebrow>{t('settings.account')}</Eyebrow>
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={styles.avatar}>
@@ -87,7 +85,7 @@ export function SettingsScreen() {
           </View>
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle} numberOfLines={1}>
-              {user?.userName ?? 'Chef'}
+              {user?.userName ?? t('settings.defaultChef')}
             </Text>
             <Text style={styles.rowMeta} numberOfLines={1}>
               {user?.userEmail ?? '—'}
@@ -98,7 +96,7 @@ export function SettingsScreen() {
 
       <View style={styles.sectionGap} />
 
-      <Eyebrow>On-device Chef</Eyebrow>
+      <Eyebrow>{t('settings.onDeviceChef')}</Eyebrow>
       <ModelCard
         state={state}
         progress={progress}
@@ -110,9 +108,9 @@ export function SettingsScreen() {
       <View style={styles.card}>
         <View style={styles.row}>
           <View style={styles.rowBody}>
-            <Text style={styles.rowTitle}>Wi-Fi only</Text>
+            <Text style={styles.rowTitle}>{t('settings.wifiOnly')}</Text>
             <Text style={styles.rowMeta}>
-              {wifiOnly ? 'Downloads pause until Wi-Fi is back.' : 'Cellular allowed.'}
+              {wifiOnly ? t('settings.wifiOnlyEnabled') : t('settings.cellularAllowed')}
             </Text>
           </View>
           <Switch
@@ -123,12 +121,12 @@ export function SettingsScreen() {
           />
         </View>
       </View>
-      <Text style={styles.privacyNote}>Conversations stay on this device.</Text>
+      <Text style={styles.privacyNote}>{t('settings.privacyNote')}</Text>
 
       <View style={styles.sectionGap} />
 
-      <Eyebrow>Sign out</Eyebrow>
-      <GhostButton onPress={onSignOut}>Sign out</GhostButton>
+      <Eyebrow>{t('settings.signOutSection')}</Eyebrow>
+      <GhostButton onPress={onSignOut}>{t('settings.signOutButton')}</GhostButton>
     </ScrollView>
   );
 }
@@ -154,14 +152,15 @@ function ProgressBar({ value }: { value: number }) {
 }
 
 function ModelCard({ state, progress, error, isActive, onStart, onCancel }: ModelCardProps) {
+  const { t } = useTranslation();
   const status =
     state === 'ready'
-      ? 'Loaded · ready'
+      ? t('settings.modelLoaded')
       : state === 'downloading'
-        ? `Downloading · ${Math.round(progress * 100)}%`
+        ? t('settings.modelDownloading', { percent: Math.round(progress * 100) })
         : state === 'error'
-          ? 'Download failed'
-          : 'Not downloaded';
+          ? t('settings.modelFailed')
+          : t('settings.modelNotDownloaded');
 
   return (
     <View style={[styles.card, isActive && styles.cardActive]}>
@@ -176,7 +175,7 @@ function ModelCard({ state, progress, error, isActive, onStart, onCancel }: Mode
             </Text>
             {isActive ? (
               <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>Active</Text>
+                <Text style={styles.activeBadgeText}>{t('settings.modelActiveBadge')}</Text>
               </View>
             ) : null}
           </View>
@@ -188,7 +187,7 @@ function ModelCard({ state, progress, error, isActive, onStart, onCancel }: Mode
         <View style={styles.progressBlock}>
           <ProgressBar value={progress} />
           <Pressable onPress={onCancel} style={styles.cancelBtn}>
-            <Text style={styles.cancelText}>Cancel download</Text>
+            <Text style={styles.cancelText}>{t('settings.cancelDownload')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -198,7 +197,7 @@ function ModelCard({ state, progress, error, isActive, onStart, onCancel }: Mode
       {state === 'idle' || state === 'error' ? (
         <View style={styles.cta}>
           <CopperButton onPress={onStart}>
-            {state === 'error' ? 'Retry download' : 'Download Antoine · 5.9 GB'}
+            {state === 'error' ? t('settings.retryDownload') : t('settings.downloadAntoine')}
           </CopperButton>
         </View>
       ) : null}

@@ -1,3 +1,4 @@
+import { Trans, useTranslation } from 'react-i18next';
 import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -69,6 +70,7 @@ function DownloadIcon({ color }: { color: string }) {
 }
 
 export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const wifiOnly = useModelStore((s) => s.wifiOnly);
@@ -83,20 +85,16 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
       void setWifiOnly(true);
       return;
     }
-    Alert.alert(
-      'Allow cellular downloads?',
-      'Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Allow cellular',
-          style: 'destructive',
-          onPress: () => {
-            void setWifiOnly(false);
-          },
+    Alert.alert(t('onboarding.cellularWarning'), t('onboarding.cellularWarningBody'), [
+      { text: t('onboarding.cellularCancel'), style: 'cancel' },
+      {
+        text: t('onboarding.cellularAllow'),
+        style: 'destructive',
+        onPress: () => {
+          void setWifiOnly(false);
         },
-      ],
-    );
+      },
+    ]);
   };
 
   return (
@@ -106,31 +104,20 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
       </View>
 
       <View style={styles.heroBlock}>
-        <Eyebrow>Welcome, {firstName}</Eyebrow>
+        <Eyebrow>{t('onboarding.welcomeMessage', { firstName })}</Eyebrow>
         <Text style={styles.headline}>
-          Your Chef runs <Text style={styles.headlineScript}>on this phone.</Text>
+          <Trans
+            i18nKey="onboarding.headline"
+            components={{ script: <Text style={styles.headlineScript} /> }}
+          />
         </Text>
-        <Text style={styles.lede}>
-          Pick a model once. After that, recipes, conversions, and prep stay on the device — no
-          cloud round-trips, no leaks.
-        </Text>
+        <Text style={styles.lede}>{t('onboarding.lede')}</Text>
       </View>
 
       <View style={styles.dots}>
-        <PrivacyDot
-          on
-          label="Recipes & prep stay on device"
-          sub="Your kitchen IP never leaves the phone."
-        />
-        <PrivacyDot
-          on
-          label="Works offline mid-service"
-          sub="No signal in the walk-in? Still answers."
-        />
-        <PrivacyDot
-          label="One-time download, ~5.9 GB"
-          sub="Pause and resume any time. Download policy below."
-        />
+        <PrivacyDot on label={t('onboarding.privacy1Label')} sub={t('onboarding.privacy1Sub')} />
+        <PrivacyDot on label={t('onboarding.privacy2Label')} sub={t('onboarding.privacy2Sub')} />
+        <PrivacyDot label={t('onboarding.privacy3Label')} sub={t('onboarding.privacy3Sub')} />
       </View>
 
       <View style={styles.spacer} />
@@ -139,9 +126,9 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
 
       <View style={styles.networkRow}>
         <View style={styles.networkLabel}>
-          <Text style={styles.networkTitle}>Wi-Fi only</Text>
+          <Text style={styles.networkTitle}>{t('onboarding.wifiOnlyLabel')}</Text>
           <Text style={styles.networkSub}>
-            {wifiOnly ? 'Recommended. Saves cellular data.' : 'Cellular allowed.'}
+            {wifiOnly ? t('onboarding.wifiOnlySubEnabled') : t('onboarding.wifiOnlySubDisabled')}
           </Text>
         </View>
         <Switch
@@ -154,7 +141,7 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
 
       <View style={[styles.ctas, { paddingBottom: insets.bottom + spacing.s5 }]}>
         <CopperButton onPress={onDownload} leading={<DownloadIcon color={palette.textOnCopper} />}>
-          Get Antoine · 5.9 GB
+          {t('onboarding.downloadButton')}
         </CopperButton>
       </View>
     </View>
@@ -162,6 +149,7 @@ export function OnboardingScreen({ onDownload }: OnboardingScreenProps) {
 }
 
 function ModelCard() {
+  const { t } = useTranslation();
   return (
     <View style={styles.card}>
       <View style={styles.cardHeader}>
@@ -172,16 +160,14 @@ function ModelCard() {
           <View style={styles.cardTitleRow}>
             <Text style={styles.cardTitle}>Antoine</Text>
             <View style={styles.cardBadge}>
-              <Text style={styles.cardBadgeText}>Recommended</Text>
+              <Text style={styles.cardBadgeText}>{t('onboarding.modelRecommended')}</Text>
             </View>
           </View>
-          <Text style={styles.cardMeta}>5.9 GB · runs locally on your phone</Text>
+          <Text style={styles.cardMeta}>{t('onboarding.modelMeta')}</Text>
         </View>
       </View>
       <Text style={styles.cardCopy}>
-        This is the AI brain that powers {ASSISTANT_NAME}. Downloading it once means every question
-        — recipes, conversions, plating ideas — is answered on your phone, with no internet. Nothing
-        you ask leaves the device.
+        {t('onboarding.modelDescription', { assistantName: ASSISTANT_NAME })}
       </Text>
     </View>
   );
