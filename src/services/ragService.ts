@@ -112,36 +112,37 @@ export async function retrieve(query: string, options: RetrieveOptions = {}): Pr
     ...(options.category ? { category: options.category } : {}),
   };
 
-  // Hard timeout. apiClient doesn't expose a per-call timeout yet, so
-  // race the fetch against a manual timer. If it times out, we don't
-  // cancel the underlying fetch (no AbortSignal threading through
-  // apiClient yet) — but we don't await it either, and the fetch's
-  // eventual completion is harmless.
-  const timeoutPromise = new Promise<RagChunk[]>((resolve) => {
-    setTimeout(() => resolve([]), RAG_TIMEOUT_MS);
-  });
+  // Hard timeout via AbortController so the underlying fetch is actually
+  // cancelled when the deadline hits — not just dropped on the JS side.
+  // Before this, a 3s-timed-out RAG call would still complete the fetch
+  // in the background, parse the JSON, then discard the result; on a
+  // mobile device, that's wasted CPU + radio time on every slow query.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), RAG_TIMEOUT_MS);
 
-  const fetchPromise = apiClient
-    .post<RagResponse>('/api/mobile/rag/retrieve', body)
-    .then((res) => {
-      if (!res || !Array.isArray(res.chunks)) return [];
-      return res.chunks;
-    })
-    .catch((e: unknown) => {
-      // Silent fallback per the contract above. Logged at info level so
-      // a developer tailing logcat can see retrieval is failing without
-      // it surfacing to the user.
-      if (e instanceof ApiError) {
-        console.info(`[ragService] ApiError ${e.status}: ${e.message} — proceeding without RAG`);
-      } else if (e instanceof NetworkError) {
-        console.info(`[ragService] NetworkError: ${e.message} — proceeding without RAG`);
-      } else {
-        console.info(`[ragService] Unexpected error, proceeding without RAG`, e);
-      }
-      return [] as RagChunk[];
+  try {
+    const res = await apiClient.post<RagResponse>('/api/mobile/rag/retrieve', body, {
+      signal: controller.signal,
     });
-
-  return Promise.race([fetchPromise, timeoutPromise]);
+    if (!res || !Array.isArray(res.chunks)) return [];
+    return res.chunks;
+  } catch (e: unknown) {
+    // Silent fallback per the contract above. Logged at info level so
+    // a developer tailing logcat can see retrieval is failing without
+    // it surfacing to the user.
+    if ((e as Error)?.name === 'AbortError') {
+      console.info(`[ragService] Timed out after ${RAG_TIMEOUT_MS}ms — proceeding without RAG`);
+    } else if (e instanceof ApiError) {
+      console.info(`[ragService] ApiError ${e.status}: ${e.message} — proceeding without RAG`);
+    } else if (e instanceof NetworkError) {
+      console.info(`[ragService] NetworkError: ${e.message} — proceeding without RAG`);
+    } else {
+      console.info(`[ragService] Unexpected error, proceeding without RAG`, e);
+    }
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**

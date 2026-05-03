@@ -64,6 +64,20 @@ interface StartArgs {
  */
 export const __forceError = { value: false };
 
+/**
+ * Module-level gate that serializes the read-then-spawn portion of
+ * concurrent `start()` calls. Without this, two `start()` calls racing
+ * before either's `getActiveDownloads()` resolves would BOTH see "no
+ * active downloads" and BOTH call `startDownload()` for the same files,
+ * causing duplicate Room rows + duplicate native workers (the in-flight
+ * dedupe in BackgroundDownloadModule fires too late to prevent the row
+ * write). The second caller waits for the first's bootstrap to finish
+ * registering downloads, then runs its own `getActiveDownloads()` which
+ * now sees the active rows and adopts them. Latest-wins chaining; cleared
+ * in `.finally`.
+ */
+let inflightBootstrap: Promise<void> | null = null;
+
 const MODEL_SUBDIRECTORY = `models/${MODEL.id}/v1`;
 
 const FILES = [MODEL.files.main] as const;
@@ -172,24 +186,48 @@ export function start({ onProgress, onDone, onError, wifiOnly = true }: StartArg
   // Without this, fresh JS would start a duplicate worker that the
   // de-dupe in BackgroundDownloadModule would refuse, leaving the bar
   // stuck at 0 with no events flowing. Seed bytes from Room state.
-  native
-    .getActiveDownloads()
-    .then((rows: ActiveDownload[]) => {
-      if (cancelled || done) return;
-      for (const row of rows) {
-        if (row.modelId !== MODEL.id) continue;
-        bytesByDownloadId[row.downloadId] = row.bytesDownloaded;
-        fileNameToId[row.fileName] = row.downloadId;
-        if (row.status === 'COMPLETED') completed.add(row.fileName);
+  //
+  // Wrapped in an inflightBootstrap chain so that two concurrent start()
+  // calls don't both see "no active downloads" and both spawn duplicates.
+  // See the module-level comment on `inflightBootstrap` for rationale.
+  const previousBootstrap = inflightBootstrap;
+  const bootstrap = (async () => {
+    if (previousBootstrap) {
+      try {
+        await previousBootstrap;
+      } catch {
+        // The other start()'s failure is its caller's concern, not ours.
       }
-      reportProgress();
-      if (completed.size >= FILES.length) {
-        finish();
-        return;
-      }
-      // Start any missing files.
-      Promise.all(
-        FILES.filter((f) => !fileNameToId[f.filename] && !completed.has(f.filename)).map((f) =>
+    }
+    if (cancelled || done) return;
+
+    let rows: ActiveDownload[];
+    try {
+      rows = await native.getActiveDownloads();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      fail(new Error(`Couldn’t read in-flight downloads. ${message}`));
+      return;
+    }
+    if (cancelled || done) return;
+
+    for (const row of rows) {
+      if (row.modelId !== MODEL.id) continue;
+      bytesByDownloadId[row.downloadId] = row.bytesDownloaded;
+      fileNameToId[row.fileName] = row.downloadId;
+      if (row.status === 'COMPLETED') completed.add(row.fileName);
+    }
+    reportProgress();
+    if (completed.size >= FILES.length) {
+      finish();
+      return;
+    }
+
+    // Start any missing files.
+    try {
+      const missing = FILES.filter((f) => !fileNameToId[f.filename] && !completed.has(f.filename));
+      await Promise.all(
+        missing.map((f) =>
           native
             .startDownload({
               url: f.url,
@@ -205,15 +243,19 @@ export function start({ onProgress, onDone, onError, wifiOnly = true }: StartArg
               return id;
             }),
         ),
-      ).catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        fail(new Error(`Couldn’t start the download. ${message}`));
-      });
-    })
-    .catch((err: unknown) => {
+      );
+    } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      fail(new Error(`Couldn’t read in-flight downloads. ${message}`));
-    });
+      fail(new Error(`Couldn’t start the download. ${message}`));
+    }
+  })();
+
+  inflightBootstrap = bootstrap.finally(() => {
+    // Latest-wins: only clear the gate if no newer start() has overwritten it.
+    if (inflightBootstrap === bootstrap) {
+      inflightBootstrap = null;
+    }
+  });
 
   return {
     cancel: () => {

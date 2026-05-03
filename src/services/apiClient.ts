@@ -46,6 +46,15 @@ interface RequestOptions {
    * by the refresh call itself to prevent infinite recursion.
    */
   skipRefresh?: boolean;
+  /**
+   * Optional AbortSignal threaded through to the underlying fetch.
+   * When the signal aborts, the fetch is cancelled and an AbortError
+   * propagates to the caller (NOT wrapped as NetworkError). Used by
+   * ragService for hard per-call timeouts so the connection actually
+   * closes instead of completing in the background after the user-visible
+   * timeout has already returned a fallback result.
+   */
+  signal?: AbortSignal;
 }
 
 /** Single in-flight refresh promise (single-flight guard). */
@@ -107,7 +116,7 @@ async function getRefreshedAccessToken(): Promise<string> {
  * error on failure.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, skipAuth = false, skipRefresh = false } = options;
+  const { method = 'GET', body, skipAuth = false, skipRefresh = false, signal } = options;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -128,8 +137,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal,
     });
-  } catch {
+  } catch (err) {
+    // AbortError must propagate as-is so the caller can distinguish
+    // an intentional cancellation from a real network failure.
+    if ((err as Error)?.name === 'AbortError') throw err;
     throw new NetworkError(`Failed to reach ${url}`);
   }
 
@@ -144,9 +157,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         method,
         headers: retryHeaders,
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal,
       });
     } catch (e) {
-      // Refresh failed — propagate AuthError or NetworkError as-is.
+      // Refresh OR retry-fetch failed. AbortError still propagates as-is;
+      // AuthError / NetworkError flow through unchanged.
+      if ((e as Error)?.name === 'AbortError') throw e;
       throw e;
     }
   }
