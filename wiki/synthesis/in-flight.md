@@ -44,9 +44,14 @@ Nothing blocked. Branch state clean. CI is live on main and gates every PR; lint
 
 ## Next action — locked sequence
 
-1. **v1.3 — Additional languages, incrementally.** First candidate is FR (placeholder `antoine-system-prompt-fr` already live on the web side; needs human authoring + culinary-reviewer signoff + eval-harness pass before the picker exposes FR via the feature flag). Each subsequent language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip).
-2. **v1.3 — Locale-aware RAG retrieval.** Chunks tagged by language; retrieval honours the active conversation language. Web-side schema work needed first.
-3. **v1.4+ — TBD.** Vision rerun gated on Vulkan upstream (weekly monitor `trig_01S6Yk7CnGzxVzo2J698aaCv` still running). Other product directions (recipe scaling tool, conversation export, STT) explored + parked at the 2026-05-03 CEO review.
+1. **v1.3 PR-A — In-app feedback / bug submission (queued for 2026-05-04).** Stripped MVP, ~1 day end-to-end. Slots in before v1.3 languages because (a) it's small, (b) it unblocks user signal collection while the demo APK is in circulation pre-Play-Store launch, (c) it's independent scope. Plan:
+   - **Mobile (~4h):** new `app/(modal)/feedback.tsx` with form (subject + message + category dropdown bug/feature/feedback + optional "include diagnostic info" toggle). Settings menu entry. New `feedbackService.ts` POST to backend. Confirmation toast. i18n keys (en + fr). Unit + integration tests. Device verification.
+   - **Web (~4h):** new `ckm_feedback` table (id, user_id, category, subject, body, app_version, device_info, created_dttm). `POST /api/mobile/feedback` endpoint with Bearer auth + zod validation + per-user rate limit. Forwarder integration (recommend Resend email for the MVP — fastest to wire, no new auth surface). Admin list view in the existing admin UI.
+   - **Coordination (~1h):** `mobile-needs.md` entry for the endpoint contract + privacy invariant note (no conversation content, ever, in feedback bodies).
+   - **Optional adders if usage demands:** screenshot attachment via photo picker (+2h mobile, +1h web for object storage); diagnostic bundle of app-version + device + OS + locale + scrubbed-of-query-text logcat tail (+3h mobile, +1h web — needs privacy review on logcat scrubbing); two-way reply inbox (+1d both sides); GitHub Issues forwarder for `category=bug` specifically (+2h web).
+2. **v1.3 PR-B — Additional languages, incrementally.** First candidate is FR (placeholder `antoine-system-prompt-fr` already live on the web side; needs human authoring + culinary-reviewer signoff + eval-harness pass before the picker exposes FR via the feature flag). Each subsequent language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip).
+3. **v1.3 PR-C — Locale-aware RAG retrieval.** Chunks tagged by language; retrieval honours the active conversation language. Web-side schema work needed first.
+4. **v1.4+ — TBD.** Vision rerun gated on Vulkan upstream (weekly monitor `trig_01S6Yk7CnGzxVzo2J698aaCv` still running). Other product directions (recipe scaling tool, conversation export, STT) explored + parked at the 2026-05-03 CEO review.
 
 ## Open questions / blockers
 
