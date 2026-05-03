@@ -25,6 +25,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
+// Side-effect import: initializes i18next synchronously at module load,
+// so any `useTranslation()` consumer in the tree below has a ready
+// instance. The boot effect (applyDeviceLocaleIfStoreEmpty) runs after
+// to layer on persisted/device-detected language.
+import { applyDeviceLocaleIfStoreEmpty } from '@/i18n';
 import { configureGoogleSignIn } from '@/services/googleSignIn';
 import { ensureContext } from '@/services/inferenceService';
 import { loadSystemPromptKV, markKvHandled } from '@/services/kvSessionService';
@@ -129,6 +134,13 @@ export default function RootLayout() {
     // cached prompt (or the baked-in fallback) is used by the next chat
     // message via getActivePrompt(). Never blocks app launch.
     void refreshAntoinePrompt().catch(() => undefined);
+    // i18n boot effect: hydrate the language store from SecureStore, then
+    // (only if no persisted language) attempt to detect from device locale.
+    // Per Eng review D2 Option B: i18next initialized with EN at module
+    // load; this effect upgrades to the persisted/device language with a
+    // single re-render. Brief EN flash on cold launch for non-EN users is
+    // accepted as the trade-off for defensive boot ordering. Best-effort.
+    void applyDeviceLocaleIfStoreEmpty().catch(() => undefined);
   }, [hydrate, hydrateModelPrefs]);
 
   useEffect(() => {
