@@ -16,6 +16,19 @@ export const conversations = sqliteTable(
     id: text('id').primaryKey(),
     userId: text('user_id').notNull(),
     title: text('title'),
+    /**
+     * Per-conversation language override (BCP 47 code, e.g. 'en', 'fr').
+     * NULL means "follow the user's current i18nStore.language" — this is
+     * the default for conversations created before v1.2 and for new
+     * conversations that haven't had the language explicitly switched.
+     *
+     * v1.2 reads this column to derive the slug for the system-prompt
+     * fetch (via `slugForLanguage(...)`). When non-null, it pins the
+     * conversation to that language even if the global picker changes
+     * later — useful when a user wants to keep a thread in FR while
+     * starting new threads in EN.
+     */
+    language: text('language'),
     createdDttm: integer('created_dttm', { mode: 'timestamp_ms' })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),

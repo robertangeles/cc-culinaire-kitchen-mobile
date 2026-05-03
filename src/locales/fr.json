@@ -1,8 +1,8 @@
 {
   "_meta": {
-    "language": "en",
-    "name": "English",
-    "$comment": "v1.1 PR-B populated this with ~110 strings extracted from components. New namespaces follow the convention in docs/i18n-conventions.md. Brand marks ('Antoine', 'CulinAIre Kitchen', 'LITE') stay as literals in source — they are names, not translatable copy."
+    "language": "fr",
+    "name": "Français",
+    "$comment": "v1.2 PLACEHOLDER — strings are still EN. The real FR translation lands when a culinary-fluent reviewer signs off the bundle. Until then, picking FR in the language picker just changes the system-prompt slug fetched from the web admin (antoine-system-prompt-fr); the UI chrome stays in EN. This file exists so SUPPORTED_LANGUAGES can include 'fr' without crashing on missing keys."
   },
 
   "auth": {

@@ -26,6 +26,7 @@ function rowToConversation(r: {
   id: string;
   userId: string;
   title: string | null;
+  language: string | null;
   createdDttm: Date;
   updatedDttm: Date;
   isSynced: boolean;
@@ -35,6 +36,7 @@ function rowToConversation(r: {
     id: r.id,
     userId: r.userId,
     title: r.title,
+    language: r.language,
     createdAt: r.createdDttm.getTime(),
     updatedAt: r.updatedDttm.getTime(),
     isSynced: r.isSynced,
@@ -119,6 +121,15 @@ interface ConversationStore {
    * state. Used by the History sheet's "Clear all" action.
    */
   clearAllConversations: (userId: string) => Promise<void>;
+  /**
+   * Set the per-conversation language override. Pass `null` to clear
+   * the override and fall back to the global `i18nStore.language`.
+   * Persists to SQLite, updates the local conversations array, and
+   * bumps `updatedAt` so the row resorts to the top of the History
+   * sheet (matching the convention that any user-driven mutation
+   * counts as conversation activity).
+   */
+  setConversationLanguage: (id: string, language: string | null) => Promise<void>;
   reset: () => void;
 
   startStreaming: (conversationId: string) => void;
@@ -171,6 +182,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       id,
       userId,
       title: null,
+      language: null,
       createdDttm: now,
       updatedDttm: now,
       isSynced: false,
@@ -179,6 +191,7 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       id,
       userId,
       title: null,
+      language: null,
       createdAt: now.getTime(),
       updatedAt: now.getTime(),
       isSynced: false,
@@ -288,6 +301,25 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       messages: {},
       ragChunksByConversation: {},
     });
+  },
+
+  setConversationLanguage: async (id, language) => {
+    await conversationQueries.setLanguage(id, language);
+    const now = Date.now();
+    set((s) => ({
+      conversations: s.conversations.map((c) =>
+        c.id === id ? { ...c, language, updatedAt: now, isSynced: false } : c,
+      ),
+      // Drop the cached RAG chunks for this conversation — the new
+      // language may want to retrieve from a different language's
+      // corpus once locale-aware retrieval ships in v1.3. Until then,
+      // a fresh fetch on the next user message is the right default.
+      ragChunksByConversation: (() => {
+        const next = { ...s.ragChunksByConversation };
+        delete next[id];
+        return next;
+      })(),
+    }));
   },
 
   reset: () =>

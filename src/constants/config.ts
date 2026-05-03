@@ -77,8 +77,24 @@ export const STORAGE_KEYS = {
   authUser: 'ckm_auth_user',
   modelDir: 'ckm_model_dir',
   downloadWifiOnly: 'ckm_download_wifi_only',
-  /** Cached Antoine system prompt (body + version + cachedAt as JSON). */
+  /**
+   * Cached Antoine system prompt (single-slug, v1.1 format).
+   *
+   * v1.2 deprecates this in favour of `antoinePromptMap` below, which
+   * keys cache entries by slug to support per-language prompts. This
+   * key is read once on first v1.2 boot for migration, then deleted.
+   * New code should NOT write to this key.
+   */
   antoinePrompt: 'ckm_antoine_prompt',
+  /**
+   * Cached Antoine system prompts keyed by slug (v1.2 format). JSON map
+   * `Record<slug, CacheEntry>` where each entry is either
+   *   `{ status: 'ok', body, version, cachedAt }` or
+   *   `{ status: 'not_found', checkedAt }`.
+   * The `not_found` branch is set on a 404 from the prompt fetch and
+   * drives the partial-language banner UX in v1.2.
+   */
+  antoinePromptMap: 'ckm_antoine_prompt_map',
   /**
    * User's selected language (BCP 47 code, e.g. 'en', 'fr'). Single source
    * of truth: `useI18nStore` writes here on every setLanguage(). v1.1 only
@@ -86,6 +102,12 @@ export const STORAGE_KEYS = {
    * picker + first non-EN locale bundle.
    */
   language: 'ckm_language',
+  /**
+   * Cached feature-flag bundle from `GET /api/mobile/feature-flags`.
+   * JSON-serialised `FeatureFlags` (see featureFlagsService.ts). Read by
+   * the language picker to decide which non-EN locales to surface.
+   */
+  featureFlags: 'ckm_feature_flags',
 } as const;
 
 /**

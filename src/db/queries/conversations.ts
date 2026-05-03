@@ -52,3 +52,20 @@ export async function setTitle(id: string, title: string, client: DB = db): Prom
     .set({ title, updatedDttm: new Date(), isSynced: false })
     .where(eq(conversations.id, id));
 }
+
+/**
+ * Set the per-conversation language override. Pass `null` to clear the
+ * override and fall back to the user's global `i18nStore.language`.
+ * Bumps `updatedDttm` and flips `isSynced` to false so the metadata
+ * sync queue picks up the change on next online sync.
+ */
+export async function setLanguage(
+  id: string,
+  language: string | null,
+  client: DB = db,
+): Promise<void> {
+  await client
+    .update(conversations)
+    .set({ language, updatedDttm: new Date(), isSynced: false })
+    .where(eq(conversations.id, id));
+}

@@ -21,14 +21,18 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
 import en from '@/locales/en.json';
+import fr from '@/locales/fr.json';
 import { DEFAULT_LANGUAGE, useI18nStore } from '@/store/i18nStore';
 
 /**
- * Static resource map. v1.1 ships en only; v1.2 adds fr alongside.
+ * Static resource map. v1.2 ships en + fr (the FR bundle is a
+ * placeholder — strings are still EN until a culinary-fluent reviewer
+ * signs off the translation; see locales/fr.json `_meta.$comment`).
  * Add new languages by importing the JSON and adding a key here.
  */
 const resources = {
   en: { translation: en },
+  fr: { translation: fr },
 } as const;
 
 /**

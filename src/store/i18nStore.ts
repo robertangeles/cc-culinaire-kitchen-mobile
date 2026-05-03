@@ -30,12 +30,14 @@ import { STORAGE_KEYS } from '@/constants/config';
 export const DEFAULT_LANGUAGE = 'en';
 
 /**
- * Languages whose UI bundle is shipped in this build. v1.1 ships en only.
- * v1.2 will add 'fr' and gate per-language picker visibility on the
- * web-side feature flag (per Eng review D4) — but the UI bundle list lives
- * here regardless of feature-flag state.
+ * Languages whose UI bundle is shipped in this build. v1.2 adds 'fr' as a
+ * placeholder bundle — the picker only surfaces FR once the web-side
+ * feature flag (`GET /api/mobile/feature-flags` → `languages_enabled`)
+ * includes it (per Eng review D4). The UI bundle list lives here
+ * regardless of feature-flag state so missing-key fallback paths stay
+ * consistent across builds.
  */
-export const SUPPORTED_LANGUAGES = ['en'] as const;
+export const SUPPORTED_LANGUAGES = ['en', 'fr'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
 interface I18nStore {
