@@ -1,4 +1,6 @@
+import type { TFunction } from 'i18next';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FlatList, type ListRenderItemInfo, StyleSheet } from 'react-native';
 
 import { ChatBubble } from '@/components/chat/ChatBubble';
@@ -32,16 +34,17 @@ const VERB_ROTATION_MS = 2200;
  * - streaming pre-tokens → rotating culinary verb (the long wait)
  */
 function stageSubtitle(
+  t: TFunction,
   stage: 'retrieving' | 'warming' | 'streaming' | null,
   rotatingVerb: string,
 ): string {
   switch (stage) {
     case 'retrieving':
-      return 'Antoine is consulting your library…';
+      return t('chat.retrieving');
     case 'warming':
-      return 'Antoine is warming up…';
+      return t('chat.warming');
     case 'streaming':
-      return `Antoine is ${rotatingVerb}…`;
+      return t('chat.streaming', { verb: rotatingVerb });
     default:
       return '';
   }
@@ -74,6 +77,7 @@ function useRotatingCulinaryVerb(active: boolean, intervalMs = VERB_ROTATION_MS)
 }
 
 export function ChatList({ messages }: ChatListProps) {
+  const { t } = useTranslation();
   const activeId = useConversationStore((s) => s.activeId);
   const streamingConversationId = useConversationStore((s) => s.streamingConversationId);
   const streamingText = useConversationStore((s) => s.streamingText);
@@ -112,7 +116,7 @@ export function ChatList({ messages }: ChatListProps) {
 
   // Bubble content priority: live tokens > stage subtitle.
   const bubbleContent =
-    streamingText.length > 0 ? streamingText : stageSubtitle(streamingStage, rotatingVerb);
+    streamingText.length > 0 ? streamingText : stageSubtitle(t, streamingStage, rotatingVerb);
 
   const data: Message[] = isStreamingThisConversation
     ? [

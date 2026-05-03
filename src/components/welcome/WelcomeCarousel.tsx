@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -23,40 +24,46 @@ interface Slide {
   showLockup?: boolean;
 }
 
-const SLIDES: readonly Slide[] = [
-  {
-    title: 'A Chef in every pocket.',
-    body: 'CulinAIre Kitchen is your on-device culinary intelligence. Calm, precise, and yours alone.',
-    showLockup: true,
-  },
-  {
-    eyebrow: 'On device',
-    title: 'Your recipes never leave the phone.',
-    body: 'Antoine runs locally. No cloud calls during inference. Your kitchen stays private by default.',
-  },
-  {
-    eyebrow: 'Built for service',
-    title: 'Diagnose, suggest, time.',
-    body: 'Ask in plain language: a broken hollandaise, a 12-cover dinner, a dough that won’t rise. Antoine answers like a head chef.',
-  },
-] as const;
-
 interface WelcomeCarouselProps {
   onGetStarted: () => void;
   onSkip?: () => void;
 }
 
 export function WelcomeCarousel({ onGetStarted, onSkip }: WelcomeCarouselProps) {
+  const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
+
+  // Built inside the component so translations stay reactive to language
+  // changes (i18next re-renders consumers on switch).
+  const slides: readonly Slide[] = useMemo(
+    () => [
+      {
+        title: t('welcome.slide1Title'),
+        body: t('welcome.slide1Body'),
+        showLockup: true,
+      },
+      {
+        eyebrow: t('welcome.slide2Eyebrow'),
+        title: t('welcome.slide2Title'),
+        body: t('welcome.slide2Body'),
+      },
+      {
+        eyebrow: t('welcome.slide3Eyebrow'),
+        title: t('welcome.slide3Title'),
+        body: t('welcome.slide3Body'),
+      },
+    ],
+    [t],
+  );
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const next = Math.round(e.nativeEvent.contentOffset.x / width);
     if (next !== index) setIndex(next);
   };
 
-  const isLast = index === SLIDES.length - 1;
+  const isLast = index === slides.length - 1;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -64,11 +71,11 @@ export function WelcomeCarousel({ onGetStarted, onSkip }: WelcomeCarouselProps) 
         <Pressable
           onPress={onSkip}
           accessibilityRole="button"
-          accessibilityLabel="Skip welcome"
+          accessibilityLabel={t('welcome.skipButton')}
           style={[styles.skip, { top: insets.top + spacing.s4 }]}
           hitSlop={12}
         >
-          <Text style={styles.skipText}>Skip</Text>
+          <Text style={styles.skipText}>{t('welcome.skipButton')}</Text>
         </Pressable>
       ) : null}
 
@@ -80,7 +87,7 @@ export function WelcomeCarousel({ onGetStarted, onSkip }: WelcomeCarouselProps) 
         scrollEventThrottle={16}
         style={styles.scroll}
       >
-        {SLIDES.map((slide, i) => (
+        {slides.map((slide, i) => (
           <View key={i} style={[styles.slide, { width }]}>
             {slide.showLockup ? (
               <View style={styles.heroLockup}>
@@ -102,7 +109,7 @@ export function WelcomeCarousel({ onGetStarted, onSkip }: WelcomeCarouselProps) 
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.s5 }]}>
         <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
+          {slides.map((_, i) => (
             <View
               key={i}
               style={[styles.dot, i === index ? styles.dotActive : styles.dotInactive]}
@@ -110,7 +117,7 @@ export function WelcomeCarousel({ onGetStarted, onSkip }: WelcomeCarouselProps) 
           ))}
         </View>
         {isLast ? (
-          <CopperButton onPress={onGetStarted}>Get started</CopperButton>
+          <CopperButton onPress={onGetStarted}>{t('welcome.getStarted')}</CopperButton>
         ) : (
           <View style={styles.spacer} />
         )}

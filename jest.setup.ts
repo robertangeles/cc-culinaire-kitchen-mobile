@@ -49,6 +49,12 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(async () => undefined),
 }));
 
+// Initialize i18next + react-i18next for tests with the real EN bundle
+// so component tests render actual EN strings (not the fallback key).
+// This mirrors production boot. Loaded once at jest setup time; shared
+// across all test files.
+require('@/i18n');
+
 // Mock the hooks our screens use directly. We deliberately do NOT call
 // `requireActual('expo-router')` — that loads expo-router/src/index which
 // transitively loads StackClient and react-native-screens, neither of which

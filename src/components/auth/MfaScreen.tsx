@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -32,6 +33,7 @@ const CODE_LENGTH = 6;
  * Auto-submits when the user finishes typing 6 digits.
  */
 export function MfaScreen({ mfaSessionToken }: MfaScreenProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { verifyMfa, isLoading, error } = useAuth();
@@ -91,8 +93,8 @@ export function MfaScreen({ mfaSessionToken }: MfaScreenProps) {
           <BrandGlyph size={140} />
         </View>
 
-        <Text style={styles.tagline}>Two-step verification.</Text>
-        <Text style={styles.body}>Enter the 6-digit code from your authenticator app.</Text>
+        <Text style={styles.tagline}>{t('auth.mfaTitle')}</Text>
+        <Text style={styles.body}>{t('auth.mfaBody')}</Text>
 
         <View
           style={styles.codeRow}
@@ -128,9 +130,11 @@ export function MfaScreen({ mfaSessionToken }: MfaScreenProps) {
 
         <View style={styles.ctaBlock}>
           <CopperButton onPress={submit} disabled={!canSubmit || isLoading}>
-            Verify
+            {t('auth.mfaVerify')}
           </CopperButton>
-          <GhostButton onPress={() => router.replace('/(auth)/login')}>Back to sign in</GhostButton>
+          <GhostButton onPress={() => router.replace('/(auth)/login')}>
+            {t('auth.mfaBackToSignIn')}
+          </GhostButton>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

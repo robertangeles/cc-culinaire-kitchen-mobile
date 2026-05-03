@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { fonts, palette, radii, spacing, theme } from '@/constants/theme';
@@ -11,6 +12,7 @@ interface ChatComposerProps {
 }
 
 export function ChatComposer({ onSend, disabled = false }: ChatComposerProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const canSend = text.trim().length > 0 && !disabled;
 
@@ -29,7 +31,7 @@ export function ChatComposer({ onSend, disabled = false }: ChatComposerProps) {
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Message Antoine"
+          placeholder={t('chat.composerPlaceholder')}
           placeholderTextColor={palette.inkFaint}
           multiline
           style={styles.input}
@@ -42,7 +44,7 @@ export function ChatComposer({ onSend, disabled = false }: ChatComposerProps) {
             style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
             disabled={!canSend}
             accessibilityRole="button"
-            accessibilityLabel="Send message"
+            accessibilityLabel={t('chat.sendMessageLabel')}
           >
             <SendIcon size={20} color={palette.textOnCopper} />
           </Pressable>
