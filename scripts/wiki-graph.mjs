@@ -273,8 +273,10 @@ function walkMarkdown(dir, callback) {
  * Forgiving frontmatter reader — see scripts/wiki-search.mjs for why.
  */
 function parseFrontmatter(raw) {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!m) return { data: {}, content: raw };
+  // Normalise CRLF → LF so regex behaves the same on Windows checkouts.
+  const text = raw.replace(/\r\n/g, '\n');
+  const m = text.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!m) return { data: {}, content: text };
   const data = {};
   for (const line of m[1].split('\n')) {
     const kv = line.match(/^(\w+):\s*(.*)$/);
