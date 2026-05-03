@@ -79,6 +79,13 @@ export const STORAGE_KEYS = {
   downloadWifiOnly: 'ckm_download_wifi_only',
   /** Cached Antoine system prompt (body + version + cachedAt as JSON). */
   antoinePrompt: 'ckm_antoine_prompt',
+  /**
+   * User's selected language (BCP 47 code, e.g. 'en', 'fr'). Single source
+   * of truth: `useI18nStore` writes here on every setLanguage(). v1.1 only
+   * reads/writes; the language has no UI effect until v1.2 ships the
+   * picker + first non-EN locale bundle.
+   */
+  language: 'ckm_language',
 } as const;
 
 /**

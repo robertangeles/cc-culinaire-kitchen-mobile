@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "language": "en",
+    "name": "English",
+    "$comment": "Empty namespace skeleton for v1.1 PR-A. v1.1 PR-B extracts ~60-80 hardcoded strings into the namespaces below. New namespaces follow the convention in docs/i18n-conventions.md."
+  },
+  "auth": {},
+  "chat": {},
+  "settings": {},
+  "errors": {},
+  "actions": {},
+  "chef": {}
+}
