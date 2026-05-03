@@ -108,6 +108,13 @@ export const STORAGE_KEYS = {
    * the language picker to decide which non-EN locales to surface.
    */
   featureFlags: 'ckm_feature_flags',
+  /**
+   * Cached site-page bundles (terms + privacy + future static pages),
+   * keyed by slug under a single JSON map. See siteService.ts for the
+   * read/write shape. Lets users see the legal copy offline after one
+   * online fetch.
+   */
+  sitePages: 'ckm_site_pages',
 } as const;
 
 /**
@@ -116,3 +123,17 @@ export const STORAGE_KEYS = {
  * here; `server` prompts return 404 by design.
  */
 export const ANTOINE_PROMPT_SLUG = 'antoine-system-prompt';
+
+/**
+ * Site-page slugs used by the in-app legal pages. Each maps to a
+ * `GET /api/site-pages/:slug?surface=mobile` request via siteService.
+ * The endpoint returns markdown + a title; the LegalPageScreen renders
+ * it natively. The mobile rows are partitioned from the web rows in
+ * the same `site_page` table, so editorial copy can diverge between
+ * surfaces without conflict (per the 2026-05-03 web-side contract).
+ */
+export const SITE_PAGE_SLUGS = {
+  terms: 'terms',
+  privacy: 'privacy',
+} as const;
+export type SitePageSlug = (typeof SITE_PAGE_SLUGS)[keyof typeof SITE_PAGE_SLUGS];

@@ -25,7 +25,7 @@
     "dividerLabel": "OR",
     "googleButton": "Continue with Google",
     "googleError": "Google sign-in failed.",
-    "termsAndPrivacy": "By continuing you agree to the <termsLink>Terms</termsLink> and <privacyLink>Kitchen privacy notice</privacyLink>.",
+    "termsAndPrivacy": "By continuing you agree to the <termsLink>Terms</termsLink> and <privacyLink>Privacy Policy</privacyLink>.",
     "verifyTitle": "Verify your email.",
     "verifyBody": "We sent a verification link to <emailEm>{{email}}</emailEm>. Open it from your inbox to activate your account.",
     "verifyButton": "I verified, continue",
@@ -114,6 +114,17 @@
     "cellularAllow": "Allow cellular"
   },
 
+  "legal": {
+    "termsTitle": "Terms",
+    "privacyTitle": "Privacy Policy",
+    "closeButton": "Close",
+    "unavailableTitle": "This page is being prepared.",
+    "unavailableBody": "We're finalising the copy for this page. Try again in a minute, or check back after launch.",
+    "errorTitle": "Could not load this page.",
+    "errorBody": "Check your connection and try again. If the issue persists, the page is being updated on our side.",
+    "tryAgain": "Try again"
+  },
+
   "errors": {},
 
   "actions": {
@@ -138,6 +149,22 @@
     "slide3Body": "Ask in plain language: a broken hollandaise, a 12-cover dinner, a dough that won't rise. Antoine answers like a head chef.",
     "skipButton": "Skip",
     "getStarted": "Get started"
+  },
+
+  "foodSafety": {
+    "eyebrow": "BEFORE YOU COOK",
+    "title": "A note before we start.",
+    "lede": "Antoine is your culinary AI. He is not a substitute for your training, your judgement, or your kitchen's safety system. A quick reminder before each session.",
+    "bullet1Label": "Antoine is AI, not a guarantee.",
+    "bullet1Body": "Suggestions are model-generated. Cross-check critical steps before serving — temperatures, raw protein, dietary substitutions.",
+    "bullet2Label": "Follow HACCP for food safety.",
+    "bullet2Body": "Antoine is not your food-safety system. Apply your kitchen's HACCP plan for hazard analysis, critical control points, hygiene, temperature, and storage. He will not audit your kitchen for you.",
+    "bullet3Label": "Allergens are your responsibility.",
+    "bullet3Body": "Antoine cannot guarantee an ingredient list is allergen-safe. Always check labels yourself and confirm severe allergies with the eater.",
+    "bullet4Label": "Not medical or dietary advice.",
+    "bullet4Body": "Nothing Antoine says is medical, nutritional, or therapeutic guidance. Speak to a registered professional for any health-driven food decision.",
+    "fineprint": "By tapping below, you confirm you've read these and agree to the food-safety section of the Terms of Service.",
+    "ackButton": "I understand"
   },
 
   "onboarding": {

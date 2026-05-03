@@ -4,6 +4,12 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-03 — Device-screenshot procedure documented
+
+Burned ~6 minutes of fumbling between PowerShell `>` redirection (mangles PNG bytes via UTF-16 string conversion) and Git Bash `MSYS_NO_PATHCONV` interactions (rewrites `/sdcard/...` to `C:/Program Files/Git/sdcard/...`). Captured the working PowerShell one-liner and the three failure modes in [concepts/device-screenshots.md](concepts/device-screenshots.md) so the next session goes straight to `adb shell screencap` + `adb pull` from PowerShell. Indexed.
+
+---
+
 ## 2026-05-03 — v1.x i18n roadmap (CEO + Eng review) and v1.1 PR-A merged
 
 Big architecture day. Nothing visibly changed in the app, but the foundation for everything from v1.1 through v1.3+ got laid down and shipped.

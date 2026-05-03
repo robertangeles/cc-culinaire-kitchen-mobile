@@ -41,6 +41,7 @@ import {
 } from '@/services/promptCacheService';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
+import { isFoodSafetyAckRequired, useFoodSafetyStore } from '@/store/foodSafetyStore';
 import { useModelStore } from '@/store/modelStore';
 
 // Configure Google Sign-In at module load (idempotent, safe to call before
@@ -65,15 +66,25 @@ function RouteGuard() {
   // returning user with the model already downloaded would see the
   // "Get Antoine · 5.9 GB" CTA every launch.
   const isModelActive = useModelStore((s) => s.isActive);
+  // Food-safety acknowledgement gate. Per-session, in-memory only —
+  // resets on cold launch + sign-out. Reinforces what Antoine is (and
+  // isn't) at every entry to chat. See foodSafetyStore for rationale.
+  const ackedThisSession = useFoodSafetyStore((s) => s.ackedThisSession);
 
   useEffect(() => {
     if (!isHydrated) return;
+    // (legal) is reachable in every auth state — Terms + Privacy must be
+    // readable before sign-up (ToS acceptance) AND after. Short-circuit
+    // before any of the auth/onboarding/food-safety redirects kick in.
+    if (segments[0] === '(legal)') return;
     const inAuthFlow =
       segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
+    const onFoodSafety = segments[0] === '(food-safety)';
     const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
 
     if (!user) {
       // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
+      // Also kick out of (food-safety) — that gate is post-auth only.
       if (!inAuthFlow) router.replace('/(welcome)');
       return;
     }
@@ -85,9 +96,23 @@ function RouteGuard() {
       return;
     }
 
-    // Fully verified: kick out of welcome + (auth) screens (these only make
-    // sense when logged out or unverified).
-    if (segments[0] === '(welcome)' || segments[0] === '(auth)') {
+    // Verified but not yet acked food-safety this session: force the
+    // ack screen. Skip when already on it to avoid a redirect loop.
+    const ackRequired = isFoodSafetyAckRequired({ ackedThisSession });
+    if (ackRequired) {
+      // expo-router's typed-routes cache doesn't pick up new route groups
+      // until the dev server regenerates types — cast as never until then.
+      if (!onFoodSafety) router.replace('/(food-safety)' as never);
+      return;
+    }
+
+    // Fully verified + acked: kick out of welcome + (auth) + (food-safety)
+    // screens (these only make sense earlier in the flow).
+    if (
+      segments[0] === '(welcome)' ||
+      segments[0] === '(auth)' ||
+      segments[0] === '(food-safety)'
+    ) {
       router.replace('/(tabs)/chat');
       return;
     }
@@ -99,7 +124,7 @@ function RouteGuard() {
     if (segments[0] === '(onboarding)' && isModelActive) {
       router.replace('/(tabs)/chat');
     }
-  }, [user, isHydrated, segments, router, isModelActive]);
+  }, [user, isHydrated, segments, router, isModelActive, ackedThisSession]);
 
   return null;
 }
