@@ -10,31 +10,29 @@ This README documents the architecture, the engineering decisions, the failures,
 
 ```mermaid
 flowchart TB
-    subgraph Phone["📱 Android Device — offline after first download"]
-        direction TB
-        UI["React Native UI<br/>(Expo SDK 54, Expo Router 6)"]
-        Stores["Zustand stores<br/>auth · model · conv · i18n · foodSafety"]
-        DB[("SQLite + Drizzle<br/>conversations + messages<br/>NEVER leave the device")]
-        Sec[("SecureStore<br/>JWT tokens · prefs")]
+    subgraph Phone["Android Device (offline after one-time download)"]
+        UI[React Native UI]
+        Stores[Zustand stores]
+        DB[(SQLite + Drizzle)]
+        Sec[(SecureStore)]
         subgraph LLM["llama.rn runtime"]
-            Model["GGUF model · 5.2 GB on disk<br/>antoine.q4_0 (Gemma 4 E4B fine-tune)"]
-            KV["KV session cache<br/>saved to disk per launch<br/>(halves cold-boot prefill)"]
-            RC["RAG cache<br/>per-conversation in Zustand<br/>(reused turn 2+: 45× speedup)"]
+            Model[GGUF model 5.2 GB]
+            KV[KV session cache]
+            RC[RAG cache per conversation]
         end
         UI --> Stores
         Stores --> DB
         Stores --> Sec
-        UI -. "user query" .-> LLM
-        LLM -. "streamed tokens" .-> UI
+        UI -.->|user query| LLM
+        LLM -.->|streamed tokens| UI
     end
 
-    subgraph Server["☁️ Web backend — Express on Render (separate repo)"]
-        direction TB
-        API["REST API"]
-        Auth[("Postgres<br/>users · subscriptions")]
-        Meta[("Conversation metadata<br/>id · timestamps · count<br/>NO content")]
-        Vec[("pgvector<br/>culinary RAG corpus")]
-        Pages[("Site pages · Antoine prompts<br/>per-language · feature flags")]
+    subgraph Server["Web backend - Express on Render"]
+        API[REST API]
+        Auth[(Postgres - users + subs)]
+        Meta[(Conversation metadata - no content)]
+        Vec[(pgvector - RAG corpus)]
+        Pages[(Site pages + prompts + flags)]
         API --> Auth
         API --> Meta
         API --> Vec
@@ -42,19 +40,20 @@ flowchart TB
     end
 
     subgraph Build["Build / one-time"]
-        Gemma["Google Gemma 4 E4B<br/>(base model)"]
-        HF["Hugging Face<br/>antoine fine-tune"]
-        R2["Cloudflare R2<br/>quantised GGUF"]
-        OAI["OpenAI text-embedding-3-small<br/>(corpus indexing only)"]
+        Gemma[Google Gemma 4 E4B]
+        HF[Hugging Face fine-tune]
+        R2[Cloudflare R2 GGUF]
+        OAI[OpenAI embeddings]
     end
 
-    Phone <-- "auth · metadata sync · feature flags" --> Server
-    Phone <-- "RAG: query text only<br/>(privacy boundary)" --> Server
-    R2 == "one-time CDN download<br/>after subscription" ==> Model
-    Gemma == "QLoRA fine-tune<br/>(Unsloth, A100)" ==> HF
-    HF == "quantise Q4_0<br/>(llama.cpp)" ==> R2
-    OAI -. "build-time indexing" .-> Vec
+    Phone <-->|auth + metadata + RAG queries| Server
+    R2 ==>|one-time CDN download| Model
+    Gemma ==>|QLoRA via Unsloth| HF
+    HF ==>|quantise Q4_0| R2
+    OAI -.->|build-time indexing| Vec
 ```
+
+Legend: solid arrows = data flow at runtime. Dashed = in-device async or build-time-only. Thick arrows = one-time / build-time pipeline.
 
 **The boundary that matters:** the only thing that crosses from the device to the backend at inference time is the user's raw query string (for RAG retrieval). The model's response, multi-turn history, image attachments, and KV cache state never leave the phone. The backend stores conversation **metadata** (id, timestamps, message count) for cross-device awareness — never message text. See [Privacy](#privacy) below for the full invariant.
 
