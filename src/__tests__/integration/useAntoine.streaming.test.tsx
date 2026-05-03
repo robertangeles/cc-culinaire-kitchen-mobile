@@ -24,6 +24,9 @@ jest.mock('@/db/queries/conversations', () => ({
   insert: jest.fn(async () => undefined),
   listByUser: jest.fn(async () => []),
   touch: jest.fn(async () => undefined),
+  setTitle: jest.fn(async () => undefined),
+  remove: jest.fn(async () => undefined),
+  removeAllForUser: jest.fn(async () => undefined),
 }));
 
 jest.mock('@/services/modelLocator', () => ({

@@ -31,3 +31,24 @@ export async function touch(id: string, client: DB = db): Promise<void> {
 export async function remove(id: string, client: DB = db): Promise<void> {
   await client.delete(conversations).where(eq(conversations.id, id));
 }
+
+/**
+ * Delete every conversation for a user. The schema's onDelete: 'cascade'
+ * on `ckm_message.conversation_id` cleans up message rows automatically.
+ */
+export async function removeAllForUser(userId: string, client: DB = db): Promise<void> {
+  await client.delete(conversations).where(eq(conversations.userId, userId));
+}
+
+/**
+ * Set the conversation's title. Used by the auto-title flow that derives
+ * a title from the first user message in a new conversation, so the
+ * History sheet stops showing a wall of identical "Untitled conversation"
+ * rows.
+ */
+export async function setTitle(id: string, title: string, client: DB = db): Promise<void> {
+  await client
+    .update(conversations)
+    .set({ title, updatedDttm: new Date(), isSynced: false })
+    .where(eq(conversations.id, id));
+}

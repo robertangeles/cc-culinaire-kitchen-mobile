@@ -42,6 +42,25 @@ function rowToConversation(r: {
   };
 }
 
+/**
+ * Derive a conversation title from the first user message. Strips
+ * whitespace, collapses newlines, truncates to ~40 chars on a word
+ * boundary, adds an ellipsis when truncated. The title persists to
+ * `ckm_conversation.title` so subsequent History sheet renders show
+ * something more useful than "Untitled conversation".
+ */
+function deriveTitleFromMessage(content: string, maxChars = 40): string {
+  const cleaned = content.replace(/\s+/g, ' ').trim();
+  if (cleaned.length === 0) return '';
+  if (cleaned.length <= maxChars) return cleaned;
+  const slice = cleaned.slice(0, maxChars);
+  const lastSpace = slice.lastIndexOf(' ');
+  // Only cut on a word boundary if it's reasonably close to the budget;
+  // otherwise hard-truncate (single very long token).
+  const cut = lastSpace > maxChars - 10 ? slice.slice(0, lastSpace) : slice;
+  return `${cut}…`;
+}
+
 interface ConversationStore {
   dbReady: boolean;
   conversations: Conversation[];
@@ -88,6 +107,18 @@ interface ConversationStore {
   setActive: (id: string | null) => Promise<void>;
   addMessage: (conversationId: string, message: Message) => Promise<void>;
   clearActive: () => Promise<void>;
+  /**
+   * Permanently delete a single conversation (and its messages, via
+   * `onDelete: 'cascade'` on the FK). Updates the local conversation
+   * list, drops cached messages + RAG chunks, and re-points `activeId`
+   * to the next conversation if the deleted one was active.
+   */
+  removeConversation: (id: string) => Promise<void>;
+  /**
+   * Permanently delete every conversation for a user. Wipes local
+   * state. Used by the History sheet's "Clear all" action.
+   */
+  clearAllConversations: (userId: string) => Promise<void>;
   reset: () => void;
 
   startStreaming: (conversationId: string) => void;
@@ -178,11 +209,35 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
       createdDttm: new Date(message.createdAt),
     });
     await conversationQueries.touch(conversationId);
+
+    // Auto-title: if this is the first user message in a still-untitled
+    // conversation, derive a title from its content and persist. Without
+    // this, every conversation in the History sheet reads as "Untitled
+    // conversation" (per chat.untitledConversation fallback) and rows
+    // are indistinguishable.
+    let derivedTitle: string | null = null;
+    if (message.role === 'user') {
+      const conv = get().conversations.find((c) => c.id === conversationId);
+      if (conv && (conv.title === null || conv.title === '')) {
+        derivedTitle = deriveTitleFromMessage(message.content);
+        if (derivedTitle.length > 0) {
+          await conversationQueries.setTitle(conversationId, derivedTitle);
+        } else {
+          derivedTitle = null;
+        }
+      }
+    }
+
     set((s) => ({
       messages: {
         ...s.messages,
         [conversationId]: [...(s.messages[conversationId] ?? []), message],
       },
+      conversations: derivedTitle
+        ? s.conversations.map((c) =>
+            c.id === conversationId ? { ...c, title: derivedTitle, isSynced: false } : c,
+          )
+        : s.conversations,
     }));
   },
 
@@ -200,6 +255,38 @@ export const useConversationStore = create<ConversationStore>((set, get) => ({
         messages: { ...s.messages, [id]: [] },
         ragChunksByConversation: nextRag,
       };
+    });
+  },
+
+  removeConversation: async (id) => {
+    await conversationQueries.remove(id);
+    set((s) => {
+      const nextConvs = s.conversations.filter((c) => c.id !== id);
+      const nextMessages = { ...s.messages };
+      delete nextMessages[id];
+      const nextRag = { ...s.ragChunksByConversation };
+      delete nextRag[id];
+      // If the deleted conversation was active, point activeId at the
+      // most-recently-updated remaining one (the list is sorted desc by
+      // updatedDttm at hydrate time + insertions go to the front), or
+      // null if there are no conversations left.
+      const nextActive = s.activeId === id ? (nextConvs[0]?.id ?? null) : s.activeId;
+      return {
+        conversations: nextConvs,
+        messages: nextMessages,
+        ragChunksByConversation: nextRag,
+        activeId: nextActive,
+      };
+    });
+  },
+
+  clearAllConversations: async (userId) => {
+    await conversationQueries.removeAllForUser(userId);
+    set({
+      conversations: [],
+      activeId: null,
+      messages: {},
+      ragChunksByConversation: {},
     });
   },
 
