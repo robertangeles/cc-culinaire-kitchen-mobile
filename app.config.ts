@@ -36,9 +36,10 @@ const config: ExpoConfig = {
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
+      // Paper (#F3EFE4) per the editorial design system. Solid colour rather
+      // than backgroundImage — the brand is editorial, not gradient/photo.
+      backgroundColor: '#F3EFE4',
       foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
       monochromeImage: './assets/images/android-icon-monochrome.png',
     },
     edgeToEdgeEnabled: true,
@@ -51,12 +52,19 @@ const config: ExpoConfig = {
       'expo-splash-screen',
       {
         image: './assets/images/splash-icon.png',
-        imageWidth: 200,
+        // 192 matches Android 12+'s native SplashScreen API icon spec (192dp).
+        // The JS-side splash held by SplashScreen.preventAutoHideAsync() then
+        // renders at the same effective scale as the OS-native splash that
+        // fired before it — eliminates the visible "icon size jump" between
+        // the two splash layers (used to read as a brief second-splash flash).
+        // Welcome carousel (slide 1) still renders the lockup at full hero
+        // size after JS hands off.
+        imageWidth: 192,
         resizeMode: 'contain',
-        backgroundColor: '#ffffff',
-        dark: {
-          backgroundColor: '#000000',
-        },
+        // Paper always — the brand is editorial, not theme-aware. NO `dark`
+        // override: a dark splash → paper welcome screen transition reads as
+        // a flash, not a fade. Paper through the whole boot keeps it seamless.
+        backgroundColor: '#F3EFE4',
       },
     ],
     'expo-secure-store',
