@@ -77,6 +77,13 @@ function RouteGuard() {
     // readable before sign-up (ToS acceptance) AND after. Short-circuit
     // before any of the auth/onboarding/food-safety redirects kick in.
     if (segments[0] === '(legal)') return;
+    // (feedback) is also reachable in every auth state — entry points exist
+    // on Login (anon path: server stores user_id=NULL, is_anonymous=true)
+    // AND on Settings (auth path). Per outside-voice #7 + 2026-05-04 plan:
+    // the demo APK population is exactly the people hitting signup/billing
+    // bugs, so gating to post-auth would lose the highest-value pre-launch
+    // signal.
+    if (segments[0] === '(feedback)') return;
     const inAuthFlow =
       segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
     const onFoodSafety = segments[0] === '(food-safety)';

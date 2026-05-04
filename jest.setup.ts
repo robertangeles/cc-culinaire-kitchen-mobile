@@ -1,5 +1,13 @@
 import '@testing-library/jest-native/extend-expect';
 
+// @react-native-async-storage/async-storage ships a dedicated jest mock
+// that provides an in-memory implementation. Register it globally so any
+// test that transitively imports a module touching AsyncStorage (e.g.
+// authStore → feedbackCount → AsyncStorage) doesn't crash on module load.
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
 // expo-sqlite's native module isn't available in jest. db/client.ts calls
 // openDatabaseSync at import time, which transitively breaks every test
 // file that imports a store/hook touching the db. Stub the open call;

@@ -24,11 +24,24 @@
  * `docs/architecture/web-backend-api.md`. Read that before adding new
  * endpoint helpers — response shapes are the source of truth.
  */
+import * as Application from 'expo-application';
+
 import { API_BASE_URL } from '@/constants/config';
 import { useAuthStore } from '@/store/authStore';
 import type { AuthSession } from '@/types/auth';
 
-import { ApiError, AuthError, NetworkError } from './__errors__';
+import { ApiError, AuthError, NetworkError, UpgradeRequiredError } from './__errors__';
+
+/**
+ * Mobile app version sent on every outbound request as `X-Mobile-App-Version`.
+ * Read once at module load (memoized). Server middleware parses this on
+ * every request and attaches to request context. Enforcement (returning
+ * 426 Upgrade Required) is currently gated to `/api/mobile/feedback` only
+ * per the 2026-05-04 eng review — old clients can still log in, refresh
+ * tokens, fetch prompts. Other endpoints can opt into 426 case-by-case
+ * in v1.4+.
+ */
+const APP_VERSION = Application.nativeApplicationVersion ?? 'unknown';
 
 interface RequestOptions {
   /** HTTP method. Defaults to 'GET'. */
@@ -120,6 +133,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    'X-Mobile-App-Version': APP_VERSION,
   };
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -187,7 +201,16 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       typeof json === 'object' && json !== null && 'error' in json && typeof json.error === 'string'
         ? json.error
         : `Request failed with status ${res.status}`;
-    throw new ApiError(res.status, errorMessage);
+    if (res.status === 426) {
+      throw new UpgradeRequiredError(errorMessage);
+    }
+    let retryAfter: number | undefined;
+    if (res.status === 429) {
+      const raw = res.headers.get('Retry-After');
+      const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+      if (Number.isFinite(parsed) && parsed >= 0) retryAfter = parsed;
+    }
+    throw new ApiError(res.status, errorMessage, retryAfter);
   }
 
   return json as T;

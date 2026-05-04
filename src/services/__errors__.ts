@@ -27,10 +27,17 @@
 /** Base class for any backend-related error. */
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /**
+   * Seconds until retry, parsed from the `Retry-After` response header
+   * when status is 429. Undefined when the header is absent or status
+   * is not 429. Used by feedbackService's countdown UX.
+   */
+  readonly retryAfter?: number;
+  constructor(status: number, message: string, retryAfter?: number) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -47,6 +54,21 @@ export class AuthError extends ApiError {
   constructor(message = 'Session expired. Please sign in again.') {
     super(401, message);
     this.name = 'AuthError';
+  }
+}
+
+/**
+ * Server returned 426 Upgrade Required. The client app version (sent via
+ * `X-Mobile-App-Version`) is below `MIN_MOBILE_APP_VERSION` for this
+ * endpoint. Currently only enforced on `/api/mobile/feedback` per the
+ * 2026-05-04 eng review (server middleware parses the header on every
+ * request but only the feedback endpoint returns 426). Caller surfaces
+ * the upgrade alert.
+ */
+export class UpgradeRequiredError extends ApiError {
+  constructor(message = 'A newer version of the app is required.') {
+    super(426, message);
+    this.name = 'UpgradeRequiredError';
   }
 }
 
@@ -80,6 +102,8 @@ export class EmailNotVerifiedError extends Error {
 export const isApiError = (e: unknown): e is ApiError => e instanceof ApiError;
 export const isNetworkError = (e: unknown): e is NetworkError => e instanceof NetworkError;
 export const isAuthError = (e: unknown): e is AuthError => e instanceof AuthError;
+export const isUpgradeRequiredError = (e: unknown): e is UpgradeRequiredError =>
+  e instanceof UpgradeRequiredError;
 export const isMfaRequiredError = (e: unknown): e is MfaRequiredError =>
   e instanceof MfaRequiredError;
 export const isEmailNotVerifiedError = (e: unknown): e is EmailNotVerifiedError =>

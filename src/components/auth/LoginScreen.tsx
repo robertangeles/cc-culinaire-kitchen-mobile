@@ -260,6 +260,19 @@ export function LoginScreen({ onAuthed, initialEmail }: LoginScreenProps) {
               }}
             />
           </Text>
+
+          {/* Send-feedback link — anonymous entry point. Captures pre-
+              auth bug reports (signup/billing/onboarding) that would
+              otherwise be unreachable from the post-paywall Settings
+              entry. Server stores user_id=NULL, is_anonymous=true. */}
+          <Pressable
+            onPress={() => router.push('/(feedback)?from=login' as never)}
+            accessibilityRole="link"
+            style={styles.sendFeedbackBtn}
+            hitSlop={8}
+          >
+            <Text style={styles.sendFeedbackText}>{t('auth.sendFeedbackLink')}</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </Animated.View>
@@ -338,4 +351,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.s2,
   },
   termsLink: { color: palette.copperDeep, fontFamily: fonts.uiBold },
+  sendFeedbackBtn: {
+    alignSelf: 'center',
+    marginTop: spacing.s4,
+    paddingVertical: spacing.s2,
+    paddingHorizontal: spacing.s4,
+  },
+  sendFeedbackText: {
+    fontFamily: fonts.uiBold,
+    fontSize: 13,
+    color: palette.copperDeep,
+    textAlign: 'center',
+  },
 });

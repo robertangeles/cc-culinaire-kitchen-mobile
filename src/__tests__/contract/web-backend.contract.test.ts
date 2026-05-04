@@ -277,4 +277,73 @@ describe('web backend contract', () => {
       expect(after.status).toBe(401);
     });
   });
+
+  // v1.3 PR-A: in-app feedback / bug submission contract.
+  //
+  // Auth-optional (anon path stores user_id=NULL) per outside-voice #7
+  // + 2026-05-04 plan. Server enforces zod-strict on body shape and
+  // 426 Upgrade Required when X-Mobile-App-Version is below
+  // MIN_MOBILE_APP_VERSION (only on this endpoint per eng-review 1.3).
+  //
+  // Backend may not yet be deployed to the contract-test target env at
+  // the time this runs. We treat 404 as "not deployed yet" + skip
+  // assertions rather than fail the suite.
+  describe('POST /api/mobile/feedback (anon path — no Bearer)', () => {
+    it('accepts a minimal anon submission with X-Mobile-App-Version header', async () => {
+      const { status, body } = await http('POST', '/mobile/feedback', {
+        headers: { 'X-Mobile-App-Version': '1.3.0' },
+        body: {
+          subject: 'Contract test ping',
+          body: 'Pre-deploy contract probe — please disregard.',
+          category: 'feedback',
+          device_info: null,
+          screenshot_base64: null,
+        },
+      });
+      if (status === 404) {
+        console.warn(
+          '[contract] /api/mobile/feedback not yet deployed — skipping shape assertions',
+        );
+        return;
+      }
+      expect(status).toBe(201);
+      assertType(body, 'object', 'body');
+      const b = body as Record<string, unknown>;
+      assertType(b.id, 'number', 'id');
+      assertType(b.created_dttm, 'string', 'created_dttm');
+    });
+
+    it('rejects body with unknown keys (zod-strict)', async () => {
+      const { status, body } = await http('POST', '/mobile/feedback', {
+        headers: { 'X-Mobile-App-Version': '1.3.0' },
+        body: {
+          subject: 'Contract test',
+          body: 'Test',
+          category: 'feedback',
+          device_info: null,
+          screenshot_base64: null,
+          // Unknown key — server should refuse with 400.
+          ip: '192.168.1.1',
+        },
+      });
+      if (status === 404) return;
+      expect(status).toBe(400);
+      assertErrorShape(body);
+    });
+
+    it('rejects request missing X-Mobile-App-Version header', async () => {
+      const { status, body } = await http('POST', '/mobile/feedback', {
+        body: {
+          subject: 'Test',
+          body: 'Test',
+          category: 'feedback',
+          device_info: null,
+          screenshot_base64: null,
+        },
+      });
+      if (status === 404) return;
+      expect(status).toBe(400);
+      assertErrorShape(body);
+    });
+  });
 });

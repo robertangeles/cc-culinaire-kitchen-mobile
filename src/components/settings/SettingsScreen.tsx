@@ -1,5 +1,6 @@
-import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import Feather from '@expo/vector-icons/Feather';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +13,7 @@ import { GhostButton } from '@/components/ui/GhostButton';
 import { fonts, palette, radii, spacing, theme, type } from '@/constants/theme';
 import { useAuth } from '@/hooks/useAuth';
 import { useModelDownload } from '@/hooks/useModelDownload';
+import { getCount } from '@/services/feedbackCount';
 import { useModelStore } from '@/store/modelStore';
 
 export function SettingsScreen() {
@@ -59,6 +61,29 @@ export function SettingsScreen() {
   const onSignOut = async () => {
     await signOut();
     router.replace('/(welcome)');
+  };
+
+  // Feedback submission counter — local AsyncStorage cache, namespaced
+  // per user_id (cleared on sign-out by authStore). Re-read on focus so
+  // the badge updates immediately after the user submits and returns.
+  const [feedbackCount, setFeedbackCount] = useState(0);
+  const userId = user?.userId;
+  useFocusEffect(
+    useCallback(() => {
+      if (userId === undefined) return;
+      let cancelled = false;
+      void (async () => {
+        const n = await getCount(userId);
+        if (!cancelled) setFeedbackCount(n);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [userId]),
+  );
+
+  const onOpenFeedback = () => {
+    router.push('/(feedback)?from=settings' as never);
   };
 
   return (
@@ -122,6 +147,37 @@ export function SettingsScreen() {
         </View>
       </View>
       <Text style={styles.privacyNote}>{t('settings.privacyNote')}</Text>
+
+      <View style={styles.sectionGap} />
+
+      <Eyebrow>{t('settings.feedbackSection')}</Eyebrow>
+      <Pressable
+        onPress={onOpenFeedback}
+        accessibilityRole="button"
+        accessibilityLabel={t('settings.feedbackRowTitle')}
+        style={styles.card}
+      >
+        <View style={styles.row}>
+          <View style={styles.rowBody}>
+            <View style={styles.feedbackTitleRow}>
+              <Text style={styles.rowTitle} numberOfLines={1}>
+                {t('settings.feedbackRowTitle')}
+              </Text>
+              {feedbackCount > 0 ? (
+                <View style={styles.activeBadge}>
+                  <Text style={styles.activeBadgeText}>
+                    {feedbackCount >= 100
+                      ? t('settings.feedbackCountBadgeMany')
+                      : t('settings.feedbackCountBadge', { count: feedbackCount })}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.rowMeta}>{t('settings.feedbackRowSubtitle')}</Text>
+          </View>
+          <Feather name="chevron-right" size={20} color={palette.inkMuted} />
+        </View>
+      </Pressable>
 
       <View style={styles.sectionGap} />
 
@@ -251,6 +307,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s2 },
+  feedbackTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.s2 },
   activeBadge: {
     backgroundColor: palette.copperTint,
     paddingHorizontal: 7,
