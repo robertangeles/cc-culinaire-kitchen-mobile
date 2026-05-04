@@ -4,6 +4,85 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-04 — v1.3 PR-A shipped: in-app feedback / bug submission, end-to-end
+
+PR #27 opened against `main` from `feature/ck-mob/feedback-mvp`. Three commits on the branch (`ffe1772` deferred-todo planning, `41a5f37` full implementation, `0a0ac10` version bump + web-pin sync). Device-verified end-to-end on the Moto G86 Power: anon submission from Login → 201 from prod → email landed in `ran@robertangeles.com` via the async Resend forwarder.
+
+### Mobile-side architecture
+
+Per the four cleared plan reviews from 2026-05-04 (CEO + adversarial outside voice + Eng + Design):
+
+**Service layer (4 new modules).**
+
+- `src/services/deviceInfo.ts` — closed-shape memoized fields (`app_version`, `device_model`, `os_name`, `os_version`, `locale`) sourced once at module load from `expo-application` / `expo-device` / `expo-localization` / `react-native`'s `Platform`. The shape is intentionally locked; any future addition (IP, user-agent, advertising ID, etc.) needs an explicit privacy review and a coordinated mobile + server change. Test asserts forbidden keys don't leak.
+- `src/services/feedbackPayload.ts` — single `buildPayload()` function consumed by **both** the diagnostic preview (UI) and the POST body (network). This is the source-of-truth contract that prevents preview drift from what's actually sent.
+- `src/services/feedbackService.ts` — Bearer-optional POST with a 10s `AbortController` timeout. The `anon` flag flips `skipAuth: true` so the Login-screen entry point doesn't attach a Bearer header (server stores the row as `user_id=NULL, is_anonymous=true`).
+- `src/services/feedbackCount.ts` — AsyncStorage counter namespaced under `feedback.count.<owner>` where owner is the user_id (auth) or the literal string `'anon'`.
+
+**`apiClient` extensions.** Now sends `X-Mobile-App-Version: <Application.nativeApplicationVersion>` on every outbound request. Server enforcement of this header (returning 426) is gated to `/api/mobile/feedback` only for v1.3 — other endpoints accept the header without rejecting old clients (per eng review finding 1.3). `apiClient` throws the new `UpgradeRequiredError extends ApiError` (status 426) and surfaces the parsed `Retry-After` header value as `ApiError.retryAfter` for the cooldown-countdown UX.
+
+**Modal screen.** New route group `app/(feedback)/*` with the form: subject (1..120), body (1..4000), inline 3-chip category selector (bug/feature/feedback) wrapping to two rows on narrow widths, optional diagnostic toggle revealing a literal-JSON preview card (monospace, paper-deep), optional photo attachment via `expo-image-picker` (`base64: true` so encoding happens natively, ≤500 KB cap). Submit-disabled states: validation / in-flight / 429 cooldown / 426-blocked.
+
+**Routing.** RouteGuard `(feedback)` early-return added (mirrors the v1.2 `(legal)` carve-out) so the anon path is reachable in any auth state. Without this, the unauth Login-screen entry would be bounced to `/(welcome)`.
+
+**Cross-account leak guard.** `authStore.signOut()` now explicitly clears `feedback.count.<previous_user_id>` AND `feedback.count.anon` from AsyncStorage. SecureStore wipe doesn't touch AsyncStorage; without explicit clears, the badge would leak across accounts on a shared device.
+
+**Settings + Login entry points.** Settings screen has a "Feedback & bug reports" row with a copper "{n} sent" badge above sign-out. Login screen has a "Send feedback" link below the Google sign-in row.
+
+**i18n.** Full `feedback.*` namespace + `settings.feedback*` + `auth.sendFeedbackLink` strings in both en.json and fr.json, including subject pre-fill copy keyed by entry context (`Feedback — Settings`, `Feedback — Sign in`, etc.).
+
+### Privacy invariant — what's enforced
+
+- `body` is human prose. Form copy ("Tell us what happened — please don't paste private chats.") explicitly warns against pasting conversation content. Server-side: never scanned, parsed, LLM-ified, indexed.
+- `device_info` is `null` unless the user opts into the diagnostic toggle. When opted in, the closed-shape object is shown verbatim in the preview before send. Server-side `zod.object({...}).strict()` rejects unknown keys.
+- Screenshot is opt-in per submission, base64 inline, ≤500 KB. R2 object storage migration deferred to v1.4 when volume justifies.
+- Feedback counts cleared on sign-out.
+- Anon rate-limiter on the server keys on a SHA-256 hash of IP held in memory only — `user_id IS NULL` rows contain no IP.
+
+### Web-side fulfillment (commit `2a307de`, same day)
+
+Web team wrote the contract into shared-context `api-contracts.md` § Mobile / POST `/api/mobile/feedback` and `db-schema.md` § ckm_feedback. Stack:
+
+- **Endpoint:** zod-strict body, `authenticateOptional` middleware (no silent token downgrade — invalid Bearer still returns 401, anon path requires header absence), `mobileVersionGuard({ enforceMin: true })`, per-route `feedbackRateLimit` (10/hr/user via user_id key, 3/hr/IP-hash for anon), 5-min async retry-job interval forwarding via Resend (plaintext-only MIME).
+- **Table:** `ckm_feedback` with 12 columns (`feedback_id` SERIAL PK, `user_id` nullable FK, `anonymous_ind`, `category`, `subject`, `body`, `app_version`, `device_info` JSONB, `screenshot_base64` TEXT, `email_sent_dttm`, `email_send_attempts`, `created_dttm`), 4 indexes including a partial index `WHERE email_sent_dttm IS NULL` for the retry-job hot path, 2 CHECK constraints (category enum + body length).
+- **Env:** `MIN_MOBILE_APP_VERSION` defaults sensibly; `RESEND_API_KEY` is allowed unset (rows still persist; only delivery skipped); `RESEND_FEEDBACK_INBOX` defaults to `ran@robertangeles.com` and fails fast at boot if explicitly unset.
+- **Tests:** 39 new server unit tests across controller, service, version-guard, optional-auth, rate-limiter modules. 216 total in the server package, all passing. Privacy-invariant tests fail loudly if either `.strict()` boundary is ever relaxed.
+
+### Bugs surfaced + fixed during the session
+
+**426 path proven by misconfiguration.** First device test fired the localized "Update available" alert. Diagnosed: mobile was sending `X-Mobile-App-Version: 1.0.0` (from `app.config.ts` default) but server's `MIN_MOBILE_APP_VERSION` was `1.3.0`. Bumped `app.config.ts` to `1.3.0`; the rebuild + reinstall cleared it. Side benefit: the 426 wire path was thereby end-to-end verified before any version logic could regress.
+
+**Two latent toolchain bugs.** First time the project was built on this Mac, two issues surfaced:
+
+1. `android/gradlew` lost its +x bit during the pnpm-install regeneration of `node_modules` — `chmod +x android/gradlew` fixed it.
+2. `android/gradle.properties` had a Windows-specific path baked in: `org.gradle.jvmargs=… -Djava.io.tmpdir=C:\Users\trebo\AppData\Local\Temp`. Gradle daemon refused to start with `java.io.IOException: java.io.tmpdir is set to a directory that doesn't exist`. Removed the `-Djava.io.tmpdir` override entirely (Gradle defaults to `/tmp` on Unix).
+
+`android/` is gitignored (Expo managed workflow regenerates it from `app.config.ts` at prebuild), so the gradle.properties + build.gradle versionName fixes are local-only — `app.config.ts` is the source of truth and will regenerate them on any future prebuild.
+
+### Process notes for next time
+
+- **Toolchain bring-up was the long pole, not the feature.** First Gradle build was 15m 41s including NDK 27 + Build-Tools 35/36 + CMake 3.22.1 auto-downloads; incremental rebuilds were 30-40s. Daily JS edits on the running APK are sub-second hot-reload — no rebuild needed.
+- **`pnpm android` is one-shot, not persistent.** It installs + opens + then stops Metro. For ongoing dev sessions, run `npx expo start --dev-client --lan` separately and leave it running.
+- **CLAUDE.md `pnpm android` script chains a web-drift check.** The `check-web-drift.mjs` script blocked the first build attempt because the web team's `auth.ts` had moved past the pinned commit. `pnpm check:web -- --bump` accepts the new pin; that bump is committed alongside the version change in `0a0ac10`.
+
+### Verification gates
+
+- `pnpm tsc --noEmit` clean
+- `pnpm lint` clean (0 errors, 0 warnings)
+- `pnpm test` clean (208/208 across 32 suites; 28 new tests for PR-A; apiClient + authStore + contract tests extended)
+- Wire-format parity verified against shared-context `api-contracts.md` (subject 1..120, body 1..4000, category enum, closed `device_info`, 201 `{id, created_dttm}`, 426 `{error: 'upgrade_required', minVersion}`, 429 with `Retry-After`)
+- Device verification on Moto G86 Power (anon path proven; cross-account leak guard + 429 cooldown deferred to follow-up — neither tractable without a 2nd test account / 11+ submissions in <1hr)
+
+### Wiki updates
+
+- `wiki/synthesis/in-flight.md` — moved PR-A from "next action" into "last completed", added the 2026-05-04 status block + the new locked architectural decisions for the feedback channel + cross-account leak guard, updated the next-action sequence to point at the email-verification-banner ask + PR-B (FR language) + PR-C (locale-aware RAG).
+
+### Next
+
+PR #27 awaiting review + merge. After merge: pick up the open `needs-backend.md` ask (email-verification banner — small, ~2-3h, independent scope) before kicking off PR-B.
+
+---
+
 ## 2026-05-03 (late evening) — Infra cleanup landed: PR #25 (latent bugs) + PR #26 (CRLF parser fix + GitHub Actions CI)
 
 Two infra PRs shipped tonight closed the operational backlog that had been quietly accumulating across the v1 → v1.2 product sprint.
