@@ -243,3 +243,83 @@ Context** / **Effort** / **Depends on**.
   with checksum + resume"). Without it, the entertainment screen
   prototypes against a 6-sec stub which doesn't validate the design.
 - **Effort.** Human ~2 days / CC ~3-4 hours (assuming real CDN exists).
+
+---
+
+## P2 — Feedback channel follow-ups (deferred from v1.3 PR-A)
+
+Source: `~/.gstack/projects/robertangeles-cc-culinaire-kitchen-mobile/ceo-plans/2026-05-04-in-app-feedback.md` v4.
+
+### When paywall ships: add Send-feedback link from paywall
+
+- **What.** When the react-native-iap paywall screen lands (P1 above), add a "Send feedback" link on it that navigates to `/(feedback)?from=paywall`. Mobile already supports the unauth path; only the entry point needs adding.
+- **Why.** Captures pre-subscription bug reports from the screen most likely to surface billing/subscription bugs. Originally scoped into v1.3 PR-A but pulled out because the paywall doesn't exist yet (eng review 2026-05-04 finding 1.1).
+- **Effort.** Human ~10 min / CC ~2 min (just adding a link; the route exists).
+- **Depends on.** Paywall screen shipping via P1 react-native-iap PR.
+- **Priority.** P1 (couple to the paywall PR; do not let it ship without this).
+
+### Admin list view in web admin UI
+
+- **What.** Read-tooling: list `ckm_feedback` rows, filter by category/user/date, mark triaged.
+- **Why.** Resend digest is the MVP inbox; admin UI is the long-term query surface.
+- **Effort.** Human ~2h web / CC ~30 min.
+- **Depends on.** v1.3 PR-A landed.
+- **Priority.** P2.
+
+### Server-authoritative submission count
+
+- **What.** `GET /api/mobile/feedback/count` returning per-user count; replaces local AsyncStorage counter.
+- **Why.** Fixes the "successful POST + dropped 200 response" undercount; cross-device parity.
+- **Effort.** Human ~1h web / CC ~15 min.
+- **Priority.** P2 (v1.4).
+
+### R2 migration for screenshots
+
+- **What.** Move from base64-inline (PR-A) to R2 + signed PUT. Keep `screenshot_base64` column for backward compat or migrate rows.
+- **Why.** Volume justification when submission rate exceeds inline-base64 economics (~> 50 photos/day or > 200 KB avg).
+- **Effort.** Human ~6h mobile + ~3h web / CC ~1h total.
+- **Priority.** P2 (volume-triggered).
+
+### Two-way reply inbox
+
+- **What.** User sees admin reply in-app; push notification on new reply.
+- **Why.** Closes the loop on bug reports; turns submission into a feature loop.
+- **Effort.** Human ~1d mobile + ~1d web / CC ~3-4h.
+- **Priority.** P2 (v1.4+).
+
+### GitHub Issues forwarder for `category=bug`
+
+- **What.** Server-side forwarder routes bug-category submissions to GitHub Issues via bot account.
+- **Why.** Bugs land in eng workflow without re-keying; closes "user reports show up in standup" loop.
+- **Effort.** Human ~2h web / CC ~30 min.
+- **Depends on.** Bot account creation + repo PAT scope decision.
+- **Priority.** P3 (v1.4+).
+
+### Bounded log-tail diagnostic bundle
+
+- **What.** Optional opt-in diagnostic toggle attaches last 50 console-log entries (scrubbed of any text matching conversation-content patterns).
+- **Why.** Higher-quality bug reports without PII/EXIF leakage.
+- **Effort.** Human ~3h mobile + ~1h web / CC ~45 min.
+- **Depends on.** Privacy review on logcat scrubbing.
+- **Priority.** P3 (v1.4+).
+
+### Custom `PaperToast` component (vs `Alert.alert`)
+
+- **What.** Editorial-style toast matching paper/ink/copper system.
+- **Why.** `Alert.alert` is platform-primitive; `PaperToast` extends design-system polish.
+- **Effort.** Human ~3h / CC ~30 min.
+- **Priority.** P3 (polish; not feedback-specific).
+
+### SQLite-backed offline retry queue
+
+- **What.** Failed submissions queue locally; auto-retry on next network availability.
+- **Why.** Captures bug reports user types while offline (e.g., on a flight).
+- **Effort.** Human ~4h / CC ~1h.
+- **Priority.** P3 (v1.5 candidate).
+
+### Server-side kill-switch env var (`MOBILE_FEEDBACK_ENABLED`)
+
+- **What.** Env-flag for safe rollback without code deploy. Endpoints return 503 when false.
+- **Why.** Faster rollback if channel breaks post-launch; declined for PR-A in favor of revert-PR pattern.
+- **Effort.** Human ~10 min web.
+- **Priority.** P3 (consider if Resend or PG issues become recurring).
