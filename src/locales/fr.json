@@ -31,6 +31,7 @@
     "verifyButton": "C'est vérifié, continuer",
     "resendEmailButton": "Renvoyer l'e-mail",
     "useDifferentAccount": "Utiliser un autre compte",
+    "sendFeedbackLink": "Envoyer un commentaire",
     "forgotPasswordTitle": "Mot de passe oublié ?",
     "forgotPasswordBody": "Saisissez votre e-mail et nous vous enverrons un lien pour en définir un nouveau.",
     "checkInboxTitle": "Vérifiez votre boîte de réception.",
@@ -111,7 +112,12 @@
     "cellularWarning": "Autoriser le téléchargement via les données mobiles ?",
     "cellularWarningBody": "Antoine fait environ 6 Go. Le téléchargement via les données mobiles peut consommer beaucoup de données et être lent.",
     "cellularCancel": "Annuler",
-    "cellularAllow": "Autoriser les données mobiles"
+    "cellularAllow": "Autoriser les données mobiles",
+    "feedbackSection": "Commentaires",
+    "feedbackRowTitle": "Commentaires et signalements",
+    "feedbackRowSubtitle": "Dites-nous ce qui fonctionne, ou pas.",
+    "feedbackCountBadge": "{{count}} envoyé(s)",
+    "feedbackCountBadgeMany": "100+ envoyés"
   },
 
   "legal": {
@@ -188,5 +194,47 @@
     "cellularWarningBody": "Antoine fait environ 6 Go. Le téléchargement via les données mobiles peut consommer beaucoup de données et être lent.",
     "cellularCancel": "Annuler",
     "cellularAllow": "Autoriser les données mobiles"
+  },
+
+  "feedback": {
+    "headerTitle": "Envoyer un commentaire",
+    "openEyebrow": "QU'AVEZ-VOUS EN TÊTE ?",
+    "anonEyebrow": "ANONYME",
+    "subjectPlaceholder": "Sujet rapide",
+    "subjectPrefill": {
+      "chat": "Commentaire — Chat",
+      "settings": "Commentaire — Paramètres",
+      "history": "Commentaire — Historique",
+      "language": "Commentaire — Langue",
+      "login": "Commentaire — Connexion"
+    },
+    "bodyPlaceholder": "Ce qui s'est passé, ce que vous attendiez, ce que vous avez essayé.",
+    "pasteWarning": "Dites-nous ce qui s'est passé — merci de ne pas coller de conversations privées.",
+    "categoryEyebrow": "CATÉGORIE",
+    "categoryBug": "Bogue",
+    "categoryFeature": "Fonctionnalité",
+    "categoryFeedback": "Commentaire",
+    "diagnosticToggle": "Inclure les infos de diagnostic",
+    "diagnosticToggleHelp": "Version de l'application, appareil et OS uniquement. Aucun contenu de conversation.",
+    "diagnosticPreviewHeading": "Sera envoyé",
+    "attachPhoto": "Ajouter une photo",
+    "attachPhotoChange": "Changer de photo",
+    "attachPhotoRemove": "Retirer",
+    "submitButton": "Envoyer",
+    "cancelButton": "Annuler",
+    "successAlertTitle": "Merci — Antoine l'a reçu",
+    "successAlertBody": "Nous lirons chaque mot.",
+    "rateLimitTitle": "Trop d'envois",
+    "rateLimitCountdown": "Réessayez dans {{seconds}} s.",
+    "networkErrorTitle": "Vous êtes hors ligne",
+    "networkErrorBody": "Impossible de joindre la cuisine. Réessayez quand vous aurez du signal.",
+    "upgradeRequiredTitle": "Mise à jour disponible",
+    "upgradeRequiredBody": "Une nouvelle version de l'application est requise pour envoyer un commentaire.",
+    "imageTooLargeTitle": "Photo trop grande",
+    "imageTooLargeBody": "Les photos doivent faire moins de 5 Mo après réduction.",
+    "photoPermissionTitle": "Accès aux photos refusé",
+    "photoPermissionBody": "Autorisez l'accès aux photos dans les réglages système pour joindre une capture d'écran.",
+    "genericErrorTitle": "Envoi impossible",
+    "genericErrorBody": "Quelque chose a mal tourné de notre côté. Veuillez réessayer."
   }
 }

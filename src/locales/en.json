@@ -31,6 +31,7 @@
     "verifyButton": "I verified, continue",
     "resendEmailButton": "Resend email",
     "useDifferentAccount": "Use a different account",
+    "sendFeedbackLink": "Send feedback",
     "forgotPasswordTitle": "Forgot your password?",
     "forgotPasswordBody": "Enter your email and we'll send you a link to set a new one.",
     "checkInboxTitle": "Check your inbox.",
@@ -111,7 +112,12 @@
     "cellularWarning": "Allow cellular downloads?",
     "cellularWarningBody": "Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.",
     "cellularCancel": "Cancel",
-    "cellularAllow": "Allow cellular"
+    "cellularAllow": "Allow cellular",
+    "feedbackSection": "Feedback",
+    "feedbackRowTitle": "Feedback & bug reports",
+    "feedbackRowSubtitle": "Tell us what's working — or what isn't.",
+    "feedbackCountBadge": "{{count}} sent",
+    "feedbackCountBadgeMany": "100+ sent"
   },
 
   "legal": {
@@ -188,5 +194,47 @@
     "cellularWarningBody": "Antoine is about 6 GB. Downloading on cellular may use significant data and could be slow.",
     "cellularCancel": "Cancel",
     "cellularAllow": "Allow cellular"
+  },
+
+  "feedback": {
+    "headerTitle": "Send feedback",
+    "openEyebrow": "WHAT'S ON YOUR MIND?",
+    "anonEyebrow": "ANONYMOUS",
+    "subjectPlaceholder": "Quick subject",
+    "subjectPrefill": {
+      "chat": "Feedback — Chat",
+      "settings": "Feedback — Settings",
+      "history": "Feedback — History",
+      "language": "Feedback — Language",
+      "login": "Feedback — Sign in"
+    },
+    "bodyPlaceholder": "What happened, what you expected, what you tried.",
+    "pasteWarning": "Tell us what happened — please don't paste private chats.",
+    "categoryEyebrow": "CATEGORY",
+    "categoryBug": "Bug",
+    "categoryFeature": "Feature",
+    "categoryFeedback": "Feedback",
+    "diagnosticToggle": "Include diagnostic info",
+    "diagnosticToggleHelp": "App version, device, and OS only. No conversation content.",
+    "diagnosticPreviewHeading": "Will be sent",
+    "attachPhoto": "Add photo",
+    "attachPhotoChange": "Change photo",
+    "attachPhotoRemove": "Remove",
+    "submitButton": "Send",
+    "cancelButton": "Cancel",
+    "successAlertTitle": "Thanks — Antoine has it",
+    "successAlertBody": "We'll read every word.",
+    "rateLimitTitle": "Too many submissions",
+    "rateLimitCountdown": "Try again in {{seconds}}s.",
+    "networkErrorTitle": "You're offline",
+    "networkErrorBody": "We couldn't reach the kitchen. Try again when you have signal.",
+    "upgradeRequiredTitle": "Update available",
+    "upgradeRequiredBody": "A newer version of the app is required to send feedback.",
+    "imageTooLargeTitle": "Photo too large",
+    "imageTooLargeBody": "Photos must be under 5 MB after downscale.",
+    "photoPermissionTitle": "Photo access denied",
+    "photoPermissionBody": "Allow photo access in system settings to attach a screenshot.",
+    "genericErrorTitle": "Couldn't send",
+    "genericErrorBody": "Something went wrong on our side. Please try again."
   }
 }

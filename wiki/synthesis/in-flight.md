@@ -2,7 +2,7 @@
 title: In flight — what's being worked on right now
 category: synthesis
 created: 2026-04-29
-updated: 2026-05-03
+updated: 2026-05-04
 related: [[project-status]], [[model-quantization-must-be-mainline]], [[rag-architecture]], [[server-managed-prompts]], [[privacy-invariant]], [[llama-rn-inference-params]]
 ---
 
@@ -12,7 +12,9 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
-**v1.2 closed.** PR #24 (`271fe97`) merged + device-verified on the Moto G86 Power: language picker, legal pages (Terms + Privacy via the web's `/api/site-pages/:slug?surface=mobile` endpoint), food-safety acknowledgement gate between email-verify and chat entry, copper non-EN language badge in ChatHeader. Mobile-side i18n stack is now end-to-end. R2 cleanup done — both unused mmproj files deleted from the bucket.
+**v1.3 PR-A open as PR #27** — branch `feature/ck-mob/feedback-mvp` pushed, device-verified end-to-end on the Moto G86 Power (anon submission from Login → 201 from prod → email landed in `ran@robertangeles.com` via the async Resend forwarder). Awaiting review/merge. Web side fulfilled the same day (commit `2a307de`): `POST /api/mobile/feedback` deployed, `ckm_feedback` table created, `authenticateOptional` + `mobileVersionGuard` + `feedbackRateLimit` + 5-min Resend cron live, 39 new server tests (216 total passing). Contract published to shared-context `api-contracts.md` § Mobile + `db-schema.md` § ckm_feedback.
+
+**v1.2 closed.** PR #24 (`271fe97`) merged + device-verified: language picker, legal pages, food-safety ack, copper non-EN badge. R2 cleanup done.
 
 **Locked architectural decisions** (all baked in):
 
@@ -24,34 +26,32 @@ The single source of truth for "where we are right now". Updated at the end of e
 - Picker uses a feature-flag endpoint (web-side) to gate which non-EN languages are surfaced
 - Translated prompts authored on the web admin; never auto-translated; gated by an automated eval harness
 - Brand marks ("Antoine", "CulinAIre", "LITE") stay as literals — names, not translatable copy
-- `(legal)` route group reachable in any auth state — Terms + Privacy must be readable pre-signup for ToS acceptance
+- `(legal)` and `(feedback)` route groups reachable in any auth state — Terms + Privacy must be readable pre-signup; feedback anon path captures pre-auth signup/billing bugs
 - Food-safety ack is per-session, in-memory only; resets on cold launch + sign-out
+- Feedback channel: optional Bearer (anon path stores `user_id=NULL`); `X-Mobile-App-Version` header on every request, 426 enforcement gated to `/api/mobile/feedback` only for v1.3; closed-shape `device_info` (zod-strict, opt-in via diagnostic toggle); per-user 10/hr + per-IP-hash 3/hr rate limit with Retry-After; async Resend forwarder (plaintext-only MIME)
+- Cross-account leak guard: `authStore.signOut` explicitly wipes `feedback.count.<user_id>` + `feedback.count.anon` from AsyncStorage (SecureStore wipe doesn't touch it)
 
-## Last completed (today, 2026-05-03)
+## Last completed (today, 2026-05-04)
 
-- **PR #26 merged (`21f18a5`).** Infra cleanup — wiki CRLF parser fix (PR #7's `293461c` cherry-picked) + minimal GitHub Actions CI (PR #8's `f1974c0` cherry-picked, fresh from main, dropping the stale CLAUDE.md edits + obsolete commits). First CI run caught a real bug: `react-native-markdown-display` was missing from `package.json` (PR #24 had only added it to local `node_modules`); fixed in the same PR. Also opted into Node 24 for JS-based actions ahead of GitHub's June 2026 forced cutover. Closes #7 + #8. CI is now live and runs on every future PR.
-- **PR #25 merged (`03bc43e`).** Latent-bug cleanup — `AbortSignal` threaded through `apiClient` (RAG 3s timeout now actually cancels the fetch, not just drops the response); module-level `inflightBootstrap` chain in `modelDownloadService` serializes concurrent `start()` calls so they adopt instead of duplicate Room rows. +5 unit tests.
-- **PR #24 merged (`271fe97`) + device-verified.** v1.2 finale — legal pages + food-safety ack + language badge. Built on top of the v1.2 picker checkpoint (`742a39d`). Includes RouteGuard `(legal)` early-return so unauth users can read ToS, `react-native-markdown-display` themed in the editorial palette, `<Trans>` slots routing from LoginScreen to `/(legal)/{terms|privacy}`, FR locale label aligned to "Politique de confidentialité" matching the API title, copper non-EN badge in ChatHeader.
-- **`742a39d` v1.2 picker checkpoint.** Language picker UI with partial-language banner (Option A); `getActivePrompt(slug)` parameterised; `apiClient` HTTP-status refactor with typed `HttpError`; `ckm_conversation.language` migration; `expo-localization` re-added.
-- **PR #23 merged (`f1777b0`).** v1.1.5 history sheet UX — fixed snap-point position, added per-row delete, clear-all action, auto-titles from first user message.
-- **R2 cleanup done.** Both `antoine-v2-mmproj-bf16.gguf` (945 MB) and `antoine-v2-mmproj-q8_0.gguf` (560 MB) deleted from the bucket.
-- **Cross-project unblock.** Web session's PR #14 pushed the `/api/site-pages` route that was sitting on an unpushed local branch — that was the actual cause of the 404 mobile saw, not a publish-state issue. Endpoints now live in prod for `terms` + `privacy` mobile surfaces.
-- **SessionStart hooks wired.** Mobile + web repos both got `.claude/hooks/*-on-session-start.ps1` scripts that surface the other side's `*-needs.md` only when modified since the last session (mtime + sidecar). Closes the cross-project visibility gap.
+- **PR #27 opened — v1.3 PR-A in-app feedback / bug submission.** Branch `feature/ck-mob/feedback-mvp` (3 commits: `ffe1772` deferred-todo planning, `41a5f37` full implementation, `0a0ac10` version bump 1.0.0 → 1.3.0 + web-pin sync). 12 new files, 13 modified, ~800 LOC. Service layer: `deviceInfo` (memoized closed-shape) / `feedbackPayload` (single-source `buildPayload()` feeds preview + POST body) / `feedbackService` (Bearer-optional, 10s `AbortController`) / `feedbackCount` (AsyncStorage namespaced per user_id|anon). New modal at `app/(feedback)/*` with 3-chip category, diagnostic toggle + literal-JSON preview, photo via `expo-image-picker` `base64:true` ≤500 KB. `apiClient` injects `X-Mobile-App-Version` on every request, throws `UpgradeRequiredError(426)`, surfaces `Retry-After` on `ApiError(429)`. RouteGuard `(feedback)` early-return for anon path. Settings row + copper "{n} sent" badge; Login "Send feedback" link. en + fr i18n. 28 new tests; full suite 208/208 passing. Wire format verified against shared-context `api-contracts.md` § Mobile / POST /api/mobile/feedback.
+- **Device verification on Moto G86 Power.** Anon submission from Login → form → photo attach → 201 from prod → "Thanks — Antoine has it" → email landed in `ran@robertangeles.com`. Initial 426 mismatch (mobile sent 1.0.0 vs server `MIN_MOBILE_APP_VERSION=1.3.0`) — fixed by bumping `app.config.ts` version + rebuild; the 426 error path itself was thereby proven as a side-effect of the misconfiguration.
+- **Web fulfilled the cross-project request same day.** Commit `2a307de`: `POST /api/mobile/feedback` deployed, `ckm_feedback` table created (12 cols, 4 indexes + PK, 2 CHECK constraints), `authenticateOptional` middleware (no silent token downgrade), `mobileVersionGuard({ enforceMin: true })`, per-route `feedbackRateLimit` (10/hr user, 3/hr IP-hash), 5-min async Resend retry job (plaintext-only MIME, exponential backoff, 5-attempt cap). 39 new server unit tests (216 total). `RESEND_API_KEY` allowed unset (rows still persist; only delivery skipped). `RESEND_FEEDBACK_INBOX` defaults to `ran@robertangeles.com`, fail-fast at boot if unset.
+- **Toolchain bring-up on this Mac (one-time).** Android Studio + JDK 21 (JBR) + NDK 27 + Build-Tools 35/36 + CMake 3.22.1 installed; `adb` wired. Fixed two latent bugs: `android/gradlew` lost +x bit from pnpm install (chmod +x); `android/gradle.properties` had Windows `C:\Users\trebo\…\Temp` baked into `org.gradle.jvmargs` (removed the `-Djava.io.tmpdir` override entirely). `android/` is gitignored so build.gradle versionName edit is local-only — `app.config.ts` version is the source of truth and prebuild regenerates from it.
+- **PR #26 merged (`21f18a5`).** Infra cleanup — wiki CRLF parser fix + minimal GitHub Actions CI live on main. Closes #7 + #8.
+- **PR #25 merged (`03bc43e`).** `AbortSignal` threaded through `apiClient`; `inflightBootstrap` serializes concurrent `start()` calls.
+- **PR #24 merged (`271fe97`) + device-verified.** v1.2 finale — legal pages + food-safety ack + language badge.
 
 ## Currently in flight
 
-Nothing blocked. Branch state clean. CI is live on main and gates every PR; lint / tsc / test all passing on the latest commit.
+PR #27 awaiting review + merge. Two test plan items deferred (cross-account leak guard verification — needs a 2nd test account; 429 cooldown UX — would require 11 submissions in <1hr). Branch clean. CI lint/tsc/test green.
 
 ## Next action — locked sequence
 
-1. **v1.3 PR-A — In-app feedback / bug submission (queued for 2026-05-04).** Stripped MVP, ~1 day end-to-end. Slots in before v1.3 languages because (a) it's small, (b) it unblocks user signal collection while the demo APK is in circulation pre-Play-Store launch, (c) it's independent scope. Plan:
-   - **Mobile (~4h):** new `app/(modal)/feedback.tsx` with form (subject + message + category dropdown bug/feature/feedback + optional "include diagnostic info" toggle). Settings menu entry. New `feedbackService.ts` POST to backend. Confirmation toast. i18n keys (en + fr). Unit + integration tests. Device verification.
-   - **Web (~4h):** new `ckm_feedback` table (id, user_id, category, subject, body, app_version, device_info, created_dttm). `POST /api/mobile/feedback` endpoint with Bearer auth + zod validation + per-user rate limit. Forwarder integration (recommend Resend email for the MVP — fastest to wire, no new auth surface). Admin list view in the existing admin UI.
-   - **Coordination (~1h):** `mobile-needs.md` entry for the endpoint contract + privacy invariant note (no conversation content, ever, in feedback bodies).
-   - **Optional adders if usage demands:** screenshot attachment via photo picker (+2h mobile, +1h web for object storage); diagnostic bundle of app-version + device + OS + locale + scrubbed-of-query-text logcat tail (+3h mobile, +1h web — needs privacy review on logcat scrubbing); two-way reply inbox (+1d both sides); GitHub Issues forwarder for `category=bug` specifically (+2h web).
-2. **v1.3 PR-B — Additional languages, incrementally.** First candidate is FR (placeholder `antoine-system-prompt-fr` already live on the web side; needs human authoring + culinary-reviewer signoff + eval-harness pass before the picker exposes FR via the feature flag). Each subsequent language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip).
-3. **v1.3 PR-C — Locale-aware RAG retrieval.** Chunks tagged by language; retrieval honours the active conversation language. Web-side schema work needed first.
-4. **v1.4+ — TBD.** Vision rerun gated on Vulkan upstream (weekly monitor `trig_01S6Yk7CnGzxVzo2J698aaCv` still running). Other product directions (recipe scaling tool, conversation export, STT) explored + parked at the 2026-05-03 CEO review.
+1. **Merge PR #27** once review passes; squash-commit message body should preserve the 3-commit journey. After merge, web-side `needs-frontend.md` entry can be moved from Pending → Complete (already done by web on their side).
+2. **Mobile fulfills `needs-backend.md` open ask (separate small PR).** Web requested an email-verification banner (persistent banner / modal when `user.emailVerified === false` with a "Resend verification email" button calling `POST /auth/resend-verification`, 200 / 429 responses). Independent scope; ~2-3h.
+3. **v1.3 PR-B — Additional languages, incrementally.** First candidate is FR (placeholder `antoine-system-prompt-fr` already live on the web side; needs human authoring + culinary-reviewer signoff + eval-harness pass before the picker exposes FR via the feature flag). Each subsequent language: one mobile PR (locale bundle + tests) + one web entry (authored prompt + eval pass + curated RAG corpus + feature-flag flip).
+4. **v1.3 PR-C — Locale-aware RAG retrieval.** Chunks tagged by language; retrieval honours the active conversation language. Web-side schema work needed first.
+5. **v1.4+ — TBD.** Feedback channel deferrals to v1.4+: paywall entry point (after `react-native-iap` lands), admin list view, two-way reply inbox, GitHub Issues forwarder for `category=bug`, R2 migration for screenshots when volume justifies, server-authoritative `GET /api/mobile/feedback/count`, additional 426 enforcement on other endpoints case-by-case. Vision rerun gated on Vulkan upstream (weekly monitor `trig_01S6Yk7CnGzxVzo2J698aaCv` still running).
 
 ## Open questions / blockers
 

@@ -1,3 +1,5 @@
+// AsyncStorage jest mock is registered globally in jest.setup.ts.
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 import { useAuthStore } from '@/store/authStore';
@@ -86,5 +88,23 @@ describe('authStore', () => {
     expect(useAuthStore.getState().user).toBeNull();
     expect(useAuthStore.getState().token).toBeNull();
     expect(useAuthStore.getState().refreshToken).toBeNull();
+  });
+
+  it('signOut clears feedback.count.<user_id> + feedback.count.anon (cross-account leak guard)', async () => {
+    // Eng review 2026-05-04 finding 1.2: SecureStore wipe doesn't touch
+    // AsyncStorage. The feedback count badge reads `feedback.count.<id>`
+    // from AsyncStorage, so a missing wipe leaks across accounts on a
+    // shared device.
+    useAuthStore.setState({
+      user: mockUser,
+      token: 'tk',
+      refreshToken: 'rt',
+      isHydrated: true,
+    });
+    await AsyncStorage.setItem(`feedback.count.${mockUser.userId}`, '3');
+    await AsyncStorage.setItem('feedback.count.anon', '1');
+    await useAuthStore.getState().signOut();
+    expect(await AsyncStorage.getItem(`feedback.count.${mockUser.userId}`)).toBeNull();
+    expect(await AsyncStorage.getItem('feedback.count.anon')).toBeNull();
   });
 });
