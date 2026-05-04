@@ -4,6 +4,58 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-04 (post PR #27 merge) — Local feature-branch cleanup, 14 deleted
+
+After PR #27 merged, the local branch list still held 14 feature branches from prior PRs. None had unpushed work; all had either (a) been squash-merged into main, (b) been cherry-picked into a different PR that merged, or (c) had their entire diff already present in main as patch-equivalent content (`git cherry main <branch>` reported empty for 11 of 14).
+
+Audit was via `git cherry main <branch>` for patch-ID equivalence + `gh pr list --state merged|closed --json` for the PR ↔ branch mapping. The 3 branches whose `git cherry` showed unique commits (different patch IDs) were verified against the in-flight log, which records the cherry-pick story explicitly: `wiki-crlf-parser` and `ci-workflow` were both cherry-picked into PR #26 (`wiki-crlf-and-ci`); `antoine-v2-q4_0` shipped via PR #11 (`inference-tuning`) at a different commit hash.
+
+Manifest captured before deletion (recoverable via `git checkout -b <branch> <sha>` while the SHA is reachable, or always via GitHub's `refs/pull/<n>/head` for any branch that ever had a PR):
+
+| Branch                                       | Last-tip SHA | PR         | Status                                                             |
+| -------------------------------------------- | ------------ | ---------- | ------------------------------------------------------------------ |
+| feature/ck-mob/feedback-mvp                  | a14e097      | #27        | merged                                                             |
+| feature/ck-mob/wiki-crlf-and-ci              | 4ece3c9      | #26        | merged                                                             |
+| fix/ck-mob/api-abortsignal-and-download-race | 39c6cdd      | #25        | merged                                                             |
+| feature/ck-mob/v1.2-language-picker          | 57f875e      | #24        | merged                                                             |
+| feature/ck-mob/auth-keyboard-avoid           | ac7c225      | #16        | merged                                                             |
+| feature/ck-mob/verify-email-no-token-path    | 6742cd3      | #15        | merged                                                             |
+| feature/ck-mob/lite-rename                   | 1c9dca5      | #14        | merged                                                             |
+| feature/ck-mob/streaming-bubble-verbs        | 25a4bb0      | #13        | merged                                                             |
+| feature/ck-mob/kv-session-persistence        | ffa066c      | #12        | merged                                                             |
+| feature/ck-mob/llama-rn-integration          | 88f06e1      | #9         | merged                                                             |
+| feature/ck-mob/image-only-rag-skip           | 575ccb7      | (no PR)    | content rolled into main via another path; `git cherry main` empty |
+| feature/ck-mob/antoine-v2-q4_0               | e8a3633      | #10 closed | superseded by PR #11 (inference-tuning)                            |
+| feature/ck-mob/ci-workflow                   | 70778df      | #8 closed  | cherry-picked into PR #26                                          |
+| fix/ck-mob/wiki-crlf-parser                  | 293461c      | #7 closed  | cherry-picked into PR #26                                          |
+
+### Recovery, if ever needed
+
+For branches that had a PR (13 of 14) — recovery is permanent and works after any local gc:
+
+```sh
+git fetch origin pull/<PR_NUMBER>/head:<recovery_branch_name>
+# example:
+git fetch origin pull/10/head:antoine-v2-q4_0-recovery
+```
+
+GitHub keeps `refs/pull/<n>/head` for every PR forever, even after the source branch is deleted from origin. This is the bulletproof path.
+
+For the branch with no PR (`image-only-rag-skip`, tip `575ccb7`) — recovery is via `git checkout -b image-only-rag-skip-recovery 575ccb7` while the SHA is still reachable in the local object database. Git's default `gc.reflogExpireUnreachable` is 30 days, so this is the time-limited path; if needed past that, the unique commit is listed in the audit's `git cherry main` output (none — content already in main).
+
+### Why this isn't risky
+
+- Every branch deleted has its content already in main (verified via `git cherry main`).
+- 13 of 14 had a closed/merged PR — GitHub permanently retains the branch ref via `refs/pull/<n>/head`.
+- The 14th (`image-only-rag-skip`) had `git cherry main` empty — the diff is already in main, just landed via a different PR.
+- Recovery is one `git fetch` away for the 13; for the 14th, the SHA is documented above.
+
+### Going forward
+
+When merging a PR via `gh pr merge --squash --delete-branch`, the remote branch is auto-deleted but the local tracking branch remains. The standard cleanup is `git fetch --prune origin && git branch -D <local-branch>` after merge. Adding this to the squash-merge sequence in CLAUDE.md would prevent the same accumulation from re-forming.
+
+---
+
 ## 2026-05-04 — v1.3 PR-A shipped: in-app feedback / bug submission, end-to-end
 
 PR #27 opened against `main` from `feature/ck-mob/feedback-mvp`. Three commits on the branch (`ffe1772` deferred-todo planning, `41a5f37` full implementation, `0a0ac10` version bump + web-pin sync). Device-verified end-to-end on the Moto G86 Power: anon submission from Login → 201 from prod → email landed in `ran@robertangeles.com` via the async Resend forwarder.
