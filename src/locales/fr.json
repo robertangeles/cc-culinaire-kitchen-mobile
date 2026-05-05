@@ -78,7 +78,7 @@
     "confirmClearAllBody": "Chaque conversation et ses messages seront définitivement supprimés. Action irréversible.",
     "confirmClearAll": "Tout effacer",
     "retrieving": "Antoine consulte votre bibliothèque…",
-    "warming": "Antoine se met en place…",
+    "warming": "La première réponse prend un instant. Antoine lit l'intégralité du système avant de répondre.",
     "streaming": "Antoine est en train de {{verb}}…",
     "headerLoaded": "Chargé · Antoine",
     "headerNoModel": "Aucun modèle · Télécharger",
@@ -169,6 +169,8 @@
     "bullet3Body": "Antoine ne peut pas garantir qu'une liste d'ingrédients est sans allergène. Vérifiez toujours les étiquettes vous-même et confirmez les allergies sévères avec le convive.",
     "bullet4Label": "Pas un avis médical ou diététique.",
     "bullet4Body": "Rien de ce qu'Antoine dit ne constitue une recommandation médicale, nutritionnelle ou thérapeutique. Consultez un professionnel agréé pour toute décision alimentaire liée à la santé.",
+    "bullet5Label": "La première réponse prend un instant.",
+    "bullet5Body": "Antoine fonctionne entièrement sur cet appareil — aucun aller-retour cloud. La première réponse de chaque session est plus lente car il lit l'intégralité du système avant de répondre. Les réponses suivantes sont plus rapides — il garde sa place.",
     "fineprint": "En touchant ci-dessous, vous confirmez avoir lu ces points et acceptez la section sécurité alimentaire des conditions d'utilisation.",
     "ackButton": "J'ai compris"
   },

@@ -50,3 +50,8 @@ wiki/.graph.json
 # diagnostic captures (logcat, screencaps)
 .diagnostic/
 
+# Play Console service account key — used by `eas submit` to upload AABs.
+# Download from Google Cloud Console → IAM → Service Accounts.
+# Never commit. EAS reads it locally before uploading the AAB to Play Console.
+play-console-service-account.json
+

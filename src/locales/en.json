@@ -78,7 +78,7 @@
     "confirmClearAllBody": "Every conversation and its messages will be permanently deleted. This can't be undone.",
     "confirmClearAll": "Clear all",
     "retrieving": "Antoine is consulting your library…",
-    "warming": "Antoine is warming up…",
+    "warming": "First reply takes a moment. Antoine is reading the full system before answering.",
     "streaming": "Antoine is {{verb}}…",
     "headerLoaded": "Loaded · Antoine",
     "headerNoModel": "No model · Download",
@@ -169,6 +169,8 @@
     "bullet3Body": "Antoine cannot guarantee an ingredient list is allergen-safe. Always check labels yourself and confirm severe allergies with the eater.",
     "bullet4Label": "Not medical or dietary advice.",
     "bullet4Body": "Nothing Antoine says is medical, nutritional, or therapeutic guidance. Speak to a registered professional for any health-driven food decision.",
+    "bullet5Label": "First reply takes a moment.",
+    "bullet5Body": "Antoine runs entirely on this device — no cloud round-trip. The first answer of each session is slower because he reads the full system before replying. Subsequent replies are faster as he keeps his place.",
     "fineprint": "By tapping below, you confirm you've read these and agree to the food-safety section of the Terms of Service.",
     "ackButton": "I understand"
   },

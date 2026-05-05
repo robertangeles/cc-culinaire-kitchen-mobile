@@ -20,9 +20,7 @@ const config: ExpoConfig = {
   //
   // "CulinAIre" capitalisation matches the in-app wordmark style
   // (the "AI" caps reinforce the on-device-AI nature of the product).
-  // "Lite" disambiguates this build from the future Full fork; the
-  // bundle id (`package` below) still uses the dev namespace until
-  // Play Store distribution is set up.
+  // "Lite" disambiguates this build from a future Full fork.
   name: 'CulinAIre Kitchen Lite',
   slug: 'cc-culinaire-kitchen-mob',
   version: '1.3.0',
@@ -44,7 +42,11 @@ const config: ExpoConfig = {
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
-    package: 'com.anonymous.ccculinairekitchenmob',
+    // Production Play Store namespace. IMMUTABLE once first AAB is uploaded
+    // to Play Console — the package name is the permanent identity for the
+    // listing. ".lite" mirrors the display name and reserves headroom for a
+    // future com.culinairekitchen.mobile.pro fork.
+    package: 'com.culinairekitchen.mobile.lite',
   },
   plugins: [
     'expo-router',
@@ -93,6 +95,12 @@ const config: ExpoConfig = {
     // See lessons.md "apex strips Bearer auth on GETs".
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://www.culinaire.kitchen',
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
+    // EAS project link — durable identity for all cloud builds. Created via
+    // `eas init` 2026-05-05 under @robangeles/cc-culinaire-kitchen-mob.
+    // Dynamic config means eas-cli can't auto-write this; manual is fine.
+    eas: {
+      projectId: '6ea7758d-8e4b-4e7f-bb91-583c75deb0e9',
+    },
   },
 };
 

@@ -58,6 +58,7 @@ export function FoodSafetyAckScreen() {
           <Bullet label={t('foodSafety.bullet2Label')} sub={t('foodSafety.bullet2Body')} />
           <Bullet label={t('foodSafety.bullet3Label')} sub={t('foodSafety.bullet3Body')} />
           <Bullet label={t('foodSafety.bullet4Label')} sub={t('foodSafety.bullet4Body')} />
+          <Bullet label={t('foodSafety.bullet5Label')} sub={t('foodSafety.bullet5Body')} />
         </View>
 
         <Text style={styles.fineprint}>{t('foodSafety.fineprint')}</Text>
