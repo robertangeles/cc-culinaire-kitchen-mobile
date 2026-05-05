@@ -29,6 +29,7 @@ The living knowledge base for this project.
 | [RAG architecture](concepts/rag-architecture.md)                    | Query-time retrieval against the web's culinary corpus, citation-aware prompt formatting, 3s timeout with silent fallback, three-stage streaming UX.                    | 2026-04-30 |
 | [Streaming architecture](concepts/streaming-architecture.md)        | How `llama.rn` tokens flow through a transient Zustand slice and a virtual ChatList bubble — no per-token SQLite writes, no schema change.                              | 2026-04-29 |
 | [Device screenshots](concepts/device-screenshots.md)                | The exact PowerShell incantation for capturing a PNG from the Moto G86 Power, plus the three approaches that silently corrupt the file or fail the path lookup.         | 2026-05-03 |
+| [On-device inference](concepts/on-device-inference.md)              | Stub — lifecycle of a local `llama.rn` inference call: model load, prompt assembly, token stream, privacy boundary. Flesh out when inference work resumes.              | 2026-05-05 |
 
 ## Decisions — architectural decisions with rationale
 

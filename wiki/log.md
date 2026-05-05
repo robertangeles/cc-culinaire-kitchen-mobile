@@ -4,6 +4,14 @@ Append-only log of changes to the wiki. Newest entries on top.
 
 ---
 
+## 2026-05-05 — Stubbed `concepts/on-device-inference.md` to clear broken refs
+
+Two forward-references (`antoine` → `[[on-device-inference]]`, `llama-rn-inference-params` → `[[on-device-inference]]`) had been sitting in `pnpm wiki:graph broken` output. Created a stub page at `concepts/on-device-inference.md` with the standard frontmatter + a "fill in when inference work resumes" note pointing at `src/services/inferenceService.ts`, [[llama-rn-inference-params]], [[streaming-architecture]], [[antoine]], [[privacy-invariant]]. Added a row for it to `index.md`. Stub deliberately doesn't try to be authoritative — it just satisfies the graph and gives the next session a landing pad.
+
+After: `pnpm wiki:graph build` reports 0 broken refs.
+
+---
+
 ## 2026-05-04 (post PR #27 merge) — Local feature-branch cleanup, 14 deleted
 
 After PR #27 merged, the local branch list still held 14 feature branches from prior PRs. None had unpushed work; all had either (a) been squash-merged into main, (b) been cherry-picked into a different PR that merged, or (c) had their entire diff already present in main as patch-equivalent content (`git cherry main <branch>` reported empty for 11 of 14).
