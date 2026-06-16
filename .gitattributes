@@ -1,0 +1,4 @@
+# Normalize line endings to LF on commit for all text files.
+# Prevents phantom whole-file diffs when the repo is moved between
+# Windows (CRLF) and Linux/macOS (LF). Git auto-detects text vs binary.
+* text=auto eol=lf
