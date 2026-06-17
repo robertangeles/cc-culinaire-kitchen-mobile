@@ -1,23 +1,10 @@
-import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
-
-import { DownloadingScreen } from '@/components/onboarding/DownloadingScreen';
-import { useModelDownload } from '@/hooks/useModelDownload';
-import { useModelStore } from '@/store/modelStore';
+import { Redirect } from 'expo-router';
 
 /**
- * First-launch download experience. Auto-starts the model download on
- * mount and routes to the chat once the model is ready. Replaces the
- * old "user must navigate to Settings and tap Choose & download" flow.
+ * The dedicated model-download experience has been removed during the
+ * backend-chat pivot. The route is preserved so deep links / typed-route
+ * stragglers still resolve, but it just bounces the user into chat.
  */
 export default function DownloadingRoute() {
-  const router = useRouter();
-  const { start } = useModelDownload();
-  const progress = useModelStore((s) => s.progress);
-
-  const onComplete = useCallback(() => {
-    router.replace('/(tabs)/chat');
-  }, [router]);
-
-  return <DownloadingScreen progress={progress} onMount={start} onComplete={onComplete} />;
+  return <Redirect href="/(tabs)/chat" />;
 }

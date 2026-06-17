@@ -12,7 +12,6 @@ import { useAntoine } from '@/hooks/useAntoine';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversation } from '@/hooks/useConversation';
 import { useI18nStore } from '@/store/i18nStore';
-import { useModelStore } from '@/store/modelStore';
 
 import { ChatComposer } from './ChatComposer';
 import { ChatHeader } from './ChatHeader';
@@ -35,7 +34,6 @@ export function ChatScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const isModelActive = useModelStore((s) => s.isActive);
   const { signOut } = useAuth();
   const { conversations, activeId, messages, setActive, newConversation, clearActive } =
     useConversation();
@@ -139,7 +137,7 @@ export function ChatScreen() {
   return (
     <Animated.View style={[styles.root, { paddingTop: insets.top }, rootStyle]}>
       <ChatHeader
-        modelReady={isModelActive}
+        modelReady
         onPressDownload={() => router.push('/(tabs)/settings')}
         onPressMore={() => setKebabOpen(true)}
       />

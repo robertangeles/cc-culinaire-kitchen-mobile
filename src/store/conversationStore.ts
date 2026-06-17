@@ -3,8 +3,22 @@ import { create } from 'zustand';
 import { db } from '@/db/client';
 import * as conversationQueries from '@/db/queries/conversations';
 import * as messageQueries from '@/db/queries/messages';
-import type { RagChunk } from '@/services/ragService';
 import type { Conversation, Message } from '@/types/chat';
+
+// RagChunk type was previously imported from `@/services/ragService`. The
+// on-device RAG service has been removed during the backend-chat pivot;
+// the cache slice below is preserved as scaffolding for the upcoming
+// backend-driven hook. Shape kept loose so the next iteration can pick
+// whatever the backend returns without another store edit.
+export interface RagChunk {
+  id: number;
+  source: string;
+  document: string;
+  page: number | null;
+  content: string;
+  score: number;
+  category: string;
+}
 
 function rowToMessage(r: {
   id: string;
