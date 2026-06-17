@@ -631,18 +631,23 @@ Rules:
 
 ---
 
-# Privacy Rules — Non-Negotiable
+# Conversation Data — Backend Source of Truth
 
-These rules cannot be overridden by any feature request.
+**Superseded 2026-06-15.** The original "conversation content never leaves the
+device" privacy invariant no longer holds. The strategic pivot in
+`../cc-culinaire-shared-context/decisions.md` [2026-06-15] retired on-device
+inference: Antoine now answers via the web backend (`POST /api/chat`) and
+conversation content persists to the backend conversation API
+(`/api/conversations`). The on-device SQLite tables are a local offline mirror,
+not the source of truth.
 
-- Conversation content never leaves the device
-- No analytics SDKs that collect conversation content
-- No crash reporting SDKs that upload conversation content
-- No network calls during inference
-- No remote storage of conversation content
-- If a third-party library requires network access to conversation content — reject it
-- If a dependency update introduces remote telemetry on conversation data — revert it
-- Before adding any new dependency, audit its network behaviour
+- The backend conversation store is the source of truth for conversation content.
+- Conversation content is sent to the backend over HTTPS (chat requests +
+  conversation persistence). Audit new dependencies for where they send data,
+  but conversation content reaching our own backend is now expected.
+- Still no third-party analytics or crash-reporting SDK may upload conversation
+  content to anyone other than the CulinAIre Kitchen backend.
+- See `docs/architecture/backend-chat.md` for the full data flow.
 
 ---
 

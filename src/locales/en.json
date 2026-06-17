@@ -4,7 +4,6 @@
     "name": "English",
     "$comment": "v1.1 PR-B populated this with ~110 strings extracted from components. New namespaces follow the convention in docs/i18n-conventions.md. Brand marks ('Antoine', 'CulinAIre Kitchen', 'LITE') stay as literals in source — they are names, not translatable copy."
   },
-
   "auth": {
     "signInLabel": "Sign in",
     "registerLabel": "Register",
@@ -54,7 +53,6 @@
     "mfaVerify": "Verify",
     "mfaBackToSignIn": "Back to sign in"
   },
-
   "chat": {
     "composerPlaceholder": "Message Antoine",
     "sendMessageLabel": "Send message",
@@ -86,9 +84,11 @@
     "headerDownloadModel": "Download Antoine",
     "moreActions": "More actions",
     "partialLanguageTitle": "Replies are in English for now",
-    "partialLanguageBody": "We haven't published an Antoine in {{language}} yet. Your conversation still works — Antoine just answers in English until the {{language}} translation lands."
+    "partialLanguageBody": "We haven't published an Antoine in {{language}} yet. Your conversation still works — Antoine just answers in English until the {{language}} translation lands.",
+    "errorTitle": "Antoine couldn't reply",
+    "errorGeneric": "Something went wrong reaching the kitchen. Give it another go in a moment.",
+    "errorOffline": "You're offline. Reconnect to keep cooking with Antoine."
   },
-
   "settings": {
     "title": "Settings",
     "kitchen": "Your kitchen.",
@@ -119,7 +119,6 @@
     "feedbackCountBadge": "{{count}} sent",
     "feedbackCountBadgeMany": "100+ sent"
   },
-
   "legal": {
     "termsTitle": "Terms",
     "privacyTitle": "Privacy Policy",
@@ -130,20 +129,16 @@
     "errorBody": "Check your connection and try again. If the issue persists, the page is being updated on our side.",
     "tryAgain": "Try again"
   },
-
   "errors": {},
-
   "actions": {
     "cancel": "Cancel"
   },
-
   "chef": {
     "movingIn": "{{assistantName}} is moving in.",
     "downloadingBody": "Downloading once, then everything happens on your phone — no internet needed to cook with {{assistantName}}.",
     "wifiOnly": "Wi-Fi only",
     "cellularAllowed": "Cellular allowed"
   },
-
   "welcome": {
     "slide1Title": "A Chef in every pocket.",
     "slide1Body": "CulinAIre Kitchen is your on-device culinary intelligence. Calm, precise, and yours alone.",
@@ -156,7 +151,6 @@
     "skipButton": "Skip",
     "getStarted": "Get started"
   },
-
   "foodSafety": {
     "eyebrow": "BEFORE YOU COOK",
     "title": "A note before we start.",
@@ -174,7 +168,6 @@
     "fineprint": "By tapping below, you confirm you've read these and agree to the food-safety section of the Terms of Service.",
     "ackButton": "I understand"
   },
-
   "onboarding": {
     "welcomeMessage": "Welcome, {{firstName}}",
     "headline": "Your Chef runs <script>on this phone.</script>",
@@ -197,7 +190,6 @@
     "cellularCancel": "Cancel",
     "cellularAllow": "Allow cellular"
   },
-
   "feedback": {
     "headerTitle": "Send feedback",
     "openEyebrow": "WHAT'S ON YOUR MIND?",

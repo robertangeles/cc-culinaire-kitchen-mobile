@@ -1,244 +1,105 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Alert } from 'react-native';
 
-import { completion, ensureContext } from '@/services/inferenceService';
-import {
-  markKvHandled,
-  saveSystemPromptKV,
-  wasKvHandledThisSession,
-} from '@/services/kvSessionService';
-import { getActivePrompt, slugForLanguage } from '@/services/promptCacheService';
-import { formatRagContext, retrieve, type RagChunk } from '@/services/ragService';
+import { ChatAbortError, streamChat } from '@/services/chatService';
+import { isNetworkError } from '@/services/__errors__';
 import { useAuthStore } from '@/store/authStore';
 import { useConversationStore } from '@/store/conversationStore';
-import { useI18nStore } from '@/store/i18nStore';
-import { useModelStore } from '@/store/modelStore';
-import type { Message } from '@/types/chat';
-import type { InferenceMessage } from '@/types/inference';
+import type { ChatWireMessage, Message } from '@/types/chat';
 
-// Stable empty-array reference for the messages selector — see useConversation.ts
-// for the full explanation. Returning a fresh `[]` from a Zustand selector
-// causes infinite re-renders when there's no active conversation.
-const EMPTY_MESSAGES: Message[] = [];
-
-function makeMessage(conversationId: string, role: 'user' | 'assistant', content: string): Message {
-  const id = `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-  return { id, conversationId, role, content, createdAt: Date.now() };
+/**
+ * useAntoine — chat orchestrator for the backend-chat pivot (2026-06-15).
+ *
+ * Replaces the retired on-device llama.rn hook. `send` now:
+ *   1. Ensures an active conversation (creating one if needed).
+ *   2. Persists the user message (SQLite mirror + backend) via the store.
+ *   3. Streams the assistant reply from `POST /api/chat`, piping each token
+ *      into the conversation store's streaming slice so the bubble renders
+ *      live.
+ *   4. Commits the final assistant text (SQLite mirror + backend).
+ *
+ * Abort + error handling: a per-send `AbortController` lets the screen stop
+ * an in-flight reply; transport/HTTP failures clear the streaming bubble and
+ * surface a plain-language alert (never a raw error string).
+ */
+function makeMessageId(): string {
+  return `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function useAntoine() {
-  // Backend userId is `number`; local SQLite stores it as `text`. Coerce at
-  // the boundary so the on-device schema stays opaque to backend type changes.
-  const userId = useAuthStore((s) => (s.user ? String(s.user.userId) : null));
-  // The hot path reads `isActive` via `useModelStore.getState()` inside
-  // `send()` (after the hydration gate), so we don't subscribe to it here
-  // — that would just trigger spurious re-creates of `send` whenever the
-  // model state flips. We DO subscribe to `isPrefsHydrated` because the
-  // gate's wait loop wants to short-circuit immediately on the synchronous
-  // case where hydration already finished by the time send() is called.
-  const isPrefsHydrated = useModelStore((s) => s.isPrefsHydrated);
-  const activeId = useConversationStore((s) => s.activeId);
-  const messages = useConversationStore((s) =>
-    activeId ? (s.messages[activeId] ?? EMPTY_MESSAGES) : EMPTY_MESSAGES,
-  );
-  const addMessage = useConversationStore((s) => s.addMessage);
-  const startNew = useConversationStore((s) => s.startNew);
-  const startStreaming = useConversationStore((s) => s.startStreaming);
-  const setStreamingStage = useConversationStore((s) => s.setStreamingStage);
-  const appendStreamingToken = useConversationStore((s) => s.appendStreamingToken);
-  const commitStreaming = useConversationStore((s) => s.commitStreaming);
-  const clearStreaming = useConversationStore((s) => s.clearStreaming);
+  const { t } = useTranslation();
   const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
     async (content: string) => {
-      if (!userId) return;
+      const text = content.trim();
+      if (text.length === 0 || isThinking) return;
       setError(null);
-      const conversationId = activeId ?? (await startNew(userId));
 
-      const userMessage = makeMessage(conversationId, 'user', content);
-      await addMessage(conversationId, userMessage);
+      const store = useConversationStore.getState();
+      const user = useAuthStore.getState().user;
+      if (!user) return; // The chat screen is auth-gated; defensive only.
 
-      // Wait for the boot disk-check to complete before deciding the
-      // model is missing. Otherwise a fast user tap on a freshly
-      // reloaded JS bundle can race hydration and incorrectly fall back
-      // to "Pick a Chef" while the GGUF is sitting on disk.
-      if (!isPrefsHydrated) {
-        const start = Date.now();
-        while (!useModelStore.getState().isPrefsHydrated && Date.now() - start < 3000) {
-          await new Promise((r) => setTimeout(r, 50));
-        }
-      }
-      const modelActiveNow = useModelStore.getState().isActive;
-      if (!modelActiveNow) {
-        const fallback = makeMessage(
-          conversationId,
-          'assistant',
-          'Pick a Chef to start. Open Settings → On-device Chef to download Antoine.',
-        );
-        await addMessage(conversationId, fallback);
-        return;
+      // Ensure an active conversation to attach the message to.
+      let conversationId = store.activeId;
+      if (!conversationId) {
+        conversationId = await store.startNew(String(user.userId));
       }
 
+      // Persist the user's message (store handles SQLite + backend).
+      const userMessage: Message = {
+        id: makeMessageId(),
+        conversationId,
+        role: 'user',
+        content: text,
+        createdAt: Date.now(),
+      };
+      await store.addMessage(conversationId, userMessage);
+
+      // Build the wire history the stateless backend needs (oldest first,
+      // user/assistant only — the system prompt is injected server-side).
+      const history: ChatWireMessage[] = (
+        useConversationStore.getState().messages[conversationId] ?? []
+      )
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+
+      const controller = new AbortController();
+      abortRef.current = controller;
       setIsThinking(true);
-      startStreaming(conversationId);
+      useConversationStore.getState().startStreaming(conversationId);
+
       try {
-        // Stage 1 — fetch system prompt from cache + RAG chunks (cached
-        // per-conversation) in parallel. Both are best-effort: prompt
-        // falls back to baked-in default, RAG returns [] if endpoint is
-        // offline/missing.
-        //
-        // RAG chunks are cached at the conversation level. The first
-        // user message of a conversation triggers `retrieve()`; if it
-        // returns chunks, they're frozen for the rest of the
-        // conversation (every subsequent turn reuses them via
-        // Promise.resolve, no network call). This stabilises the
-        // message-array structure across turns so llama.cpp's automatic
-        // prompt cache reuses the prefix instead of re-prefilling 700+
-        // tokens of system prompt + RAG block on every send.
-        //
-        // Empty results are intentionally NOT cached: `chunks=0` is
-        // often a transient web-side miss (embedding service blip,
-        // conversational follow-up below the topic threshold). Leaving
-        // the cache `undefined` lets the next turn retry naturally —
-        // which matters when a conversation opens with chitchat and
-        // then asks a real culinary question on turn 2.
-        setStreamingStage('retrieving');
-        const cachedChunks =
-          useConversationStore.getState().ragChunksByConversation[conversationId];
-        const isFirstRagFetch = cachedChunks === undefined;
-        // Defensive guard: ragService.retrieve throws on an empty query
-        // (programmer-error assertion). Empty-content sends shouldn't
-        // happen on the text-only chat input, but skip RAG if they do.
-        const trimmedContent = content.trim();
-        const skipRag = trimmedContent.length === 0;
-        console.info(
-          `[useAntoine] stage=retrieving — fetching prompt${
-            skipRag ? ' (RAG skipped — empty query, defensive)' : ''
-          }${!skipRag && isFirstRagFetch ? ' + RAG (first turn)' : ''}${
-            !skipRag && !isFirstRagFetch
-              ? ` (RAG reused from cache, ${cachedChunks.length} chunks)`
-              : ''
-          }`,
-        );
-        const ragPromise: Promise<RagChunk[]> = skipRag
-          ? Promise.resolve([])
-          : isFirstRagFetch
-            ? retrieve(trimmedContent, { limit: 2 })
-            : Promise.resolve(cachedChunks);
-        // Derive the prompt slug from the conversation's per-row
-        // language override, falling back to the user's global
-        // i18nStore.language when the row's language is null.
-        const conv = useConversationStore
-          .getState()
-          .conversations.find((c) => c.id === conversationId);
-        const effectiveLanguage = conv?.language ?? useI18nStore.getState().language;
-        const promptSlug = slugForLanguage(effectiveLanguage);
-        const [promptResolution, ragChunks] = await Promise.all([
-          getActivePrompt(promptSlug),
-          ragPromise,
-        ]);
-        const systemPrompt = promptResolution.body;
-        if (!skipRag && isFirstRagFetch && ragChunks.length > 0) {
-          // Freeze the first non-empty result for the rest of this
-          // conversation. We deliberately skip caching empty arrays so
-          // the next turn can retry retrieval.
-          useConversationStore.getState().setRagChunksForConversation(conversationId, ragChunks);
-        }
-        console.info(
-          `[useAntoine] retrieving done — prompt=${systemPrompt.length}b chunks=${ragChunks.length}${
-            isFirstRagFetch ? ` (cached=${ragChunks.length > 0})` : ' (reused)'
-          }`,
-        );
-
-        // Stage 2 — model load (cached after first call). The first
-        // message of a session takes multi-seconds; subsequent messages
-        // are near-instant.
-        setStreamingStage('warming');
-        console.info('[useAntoine] stage=warming — ensureContext');
-        const ctx = await ensureContext();
-        console.info('[useAntoine] context ready');
-
-        // Build the message array. System prompt first, then optional
-        // RAG context block as a second system message, then conversation
-        // history. The model is instructed (via the system prompt or
-        // training) to cite [n] references when the RAG block is present.
-        const ragBlock = formatRagContext(ragChunks);
-        const history: InferenceMessage[] = [...messages, userMessage].map((m) => ({
-          role: m.role === 'system' ? 'system' : m.role,
-          content: m.content,
-        }));
-        const inferenceMessages: InferenceMessage[] = [
-          { role: 'system', content: systemPrompt },
-          ...(ragBlock ? [{ role: 'system' as const, content: ragBlock }] : []),
-          ...history,
-        ];
-
-        // Stage 3 — stream tokens.
-        setStreamingStage('streaming');
-        const totalChars = inferenceMessages.reduce((n, m) => n + m.content.length, 0);
-        console.info(
-          `[useAntoine] stage=streaming — messages=${inferenceMessages.length} chars=${totalChars} (~${Math.ceil(totalChars / 4)}tok)`,
-        );
-
-        const result = await completion(ctx, { messages: inferenceMessages }, (token) =>
-          appendStreamingToken(token),
-        );
-        console.info(`[useAntoine] completion done — text=${result.text.length}b`);
-
-        // Commit the model's reply verbatim. The RAG chunks were the
-        // model's PRIVATE context (passed via the system message above)
-        // — they are not part of the user-visible message and must not
-        // be appended to the committed text. Antoine's inline [n]
-        // citations remain in the rendered message; the chunk text +
-        // titles never appear in the chat UI.
-        await commitStreaming(conversationId, result.text);
-
-        // After the first successful completion of this JS lifetime,
-        // save the system-prompt slice of the KV cache so the NEXT
-        // app launch can skip system-prompt prefill via loadSession.
-        // Cuts turn 1 cold-launch prefill ~78s -> ~37s.
-        //
-        // Set the flag synchronously BEFORE the async save so that a
-        // concurrent send() doesn't fire a second save. If the save
-        // throws (disk full, write error), we still skip retries this
-        // session — the next launch will retry naturally.
-        if (!wasKvHandledThisSession()) {
-          markKvHandled();
-          void saveSystemPromptKV(ctx, systemPrompt).catch((err) => {
-            console.warn('[useAntoine] saveSystemPromptKV failed:', err);
-          });
-        }
+        const finalText = await streamChat({
+          messages: history,
+          token: useAuthStore.getState().token,
+          signal: controller.signal,
+          onTextDelta: (delta) => useConversationStore.getState().appendStreamingToken(delta),
+        });
+        await useConversationStore.getState().commitStreaming(conversationId, finalText);
       } catch (e) {
-        console.error('[useAntoine] send() failed:', e);
-        clearStreaming();
-        const fallback = makeMessage(
-          conversationId,
-          'assistant',
-          e instanceof Error
-            ? `${e.message} Try again in a moment.`
-            : 'Antoine stalled. Try the question again.',
-        );
-        await addMessage(conversationId, fallback);
-        setError(e instanceof Error ? e.message : 'Inference failed');
+        useConversationStore.getState().clearStreaming();
+        // An intentional abort is not an error — leave the UI quiet.
+        if (!(e instanceof ChatAbortError)) {
+          const message = isNetworkError(e) ? t('chat.errorOffline') : t('chat.errorGeneric');
+          setError(message);
+          Alert.alert(t('chat.errorTitle'), message);
+        }
       } finally {
         setIsThinking(false);
+        abortRef.current = null;
       }
     },
-    [
-      userId,
-      activeId,
-      isPrefsHydrated,
-      messages,
-      addMessage,
-      startNew,
-      startStreaming,
-      setStreamingStage,
-      appendStreamingToken,
-      commitStreaming,
-      clearStreaming,
-    ],
+    [isThinking, t],
   );
 
-  return { send, isThinking, error };
+  /** Stop the in-flight reply (e.g. the user navigated away or pressed stop). */
+  const abort = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  return { send, abort, isThinking, error };
 }

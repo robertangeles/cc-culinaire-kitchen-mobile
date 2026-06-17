@@ -21,6 +21,18 @@ jest.mock('@/db/queries/conversations', () => ({
   removeAllForUser: jest.fn(async () => undefined),
 }));
 
+// The store now writes through to the backend conversation API after the
+// 2026-06-15 pivot. Mock it so these pure-state tests don't hit the network;
+// the write-through itself is covered in conversationStore.backend.test.ts.
+jest.mock('@/services/conversationService', () => ({
+  createConversation: jest.fn(async () => undefined),
+  listConversations: jest.fn(async () => []),
+  getConversation: jest.fn(async () => ({ messages: [] })),
+  postMessages: jest.fn(async () => undefined),
+  updateTitle: jest.fn(async () => undefined),
+  deleteConversation: jest.fn(async () => undefined),
+}));
+
 import * as messageQueries from '@/db/queries/messages';
 import { useConversationStore } from '@/store/conversationStore';
 /* eslint-enable import/first */

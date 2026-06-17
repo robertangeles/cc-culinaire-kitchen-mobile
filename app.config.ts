@@ -75,15 +75,6 @@ const config: ExpoConfig = {
     // for Google Play Services). The runtime SDK reads `webClientId` from
     // `GoogleSignin.configure()` — see src/services/googleSignIn.ts.
     '@react-native-google-signin/google-signin',
-    // Custom Android background download module. Injects Kotlin sources,
-    // manifest permissions, gradle deps, and MainApplication.kt
-    // registration on every prebuild. Required because android/ is
-    // gitignored — see plugins/withBackgroundDownload/README.md.
-    './plugins/withBackgroundDownload',
-    // Adds the ProGuard keep rule for llama.rn's native classes
-    // (`com.rnllama.**`) so they survive R8 minification on release
-    // builds. Idempotent across prebuilds.
-    './plugins/withLlamaRn',
   ],
   experiments: {
     typedRoutes: true,

@@ -33,68 +33,10 @@ export const API_BASE_URL: string =
 export const GOOGLE_WEB_CLIENT_ID: string =
   extra.googleWebClientId ?? process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-/**
- * Antoine model assets — hosted on Cloudflare R2 public bucket.
- *
- * Quantization: Q4_0 main weights (re-quantized via mainline llama.cpp
- * on 2026-04-30, replacing the prior Q4_K_M file). Q4_0 stores weights
- * in a NEON-friendly layout that runs natively on ARM without the SIMD
- * repack buffer that OOMs the 8 GB device — ~5× prefill speedup on the
- * Moto G86 Power.
- *
- * v1 ships text-only — the mmproj projector is not bundled. On-device
- * vision accuracy on Q4_0 + CPU was unreliable across photo
- * compositions (categorical food misidentification on visually-
- * ambiguous shots). The projector entry was removed on 2026-05-03.
- * If we re-enable vision in a future version (gated on either Vulkan
- * GPU offload landing in llama.rn's prebuilt JNI, or a verified higher-
- * precision projector → Q4_0 backbone path), restore the `mmproj`
- * entry following the same R2 + SHA-256 pattern.
- *
- * Sizes + SHA-256 verified via PowerShell `Get-FileHash` against the
- * R2-hosted file. The native DownloadWorker compares SHA byte-for-byte
- * against the file landed on disk; mismatch deletes the file and
- * surfaces FILE_CORRUPTED to JS. Lowercased here because the worker
- * calls .equals(ignoreCase = true).
- */
-export const MODEL = {
-  id: 'antoine',
-  displayName: 'Antoine',
-  files: {
-    main: {
-      filename: 'antoine-v2-q4_0.gguf',
-      url: 'https://pub-7a835c8f4b344301811de8e23b8b3983.r2.dev/antoine-v2-q4_0.gguf',
-      sizeBytes: 5_185_929_024,
-      sha256: '86b4b9d898bb65c771fcbd1e64c7ac80465c669ac1388ecb84963409b2e74481',
-    },
-  },
-  totalBytes: 5_185_929_024,
-} as const;
-
 export const STORAGE_KEYS = {
   authToken: 'ckm_auth_token',
   authRefreshToken: 'ckm_auth_refresh_token',
   authUser: 'ckm_auth_user',
-  modelDir: 'ckm_model_dir',
-  downloadWifiOnly: 'ckm_download_wifi_only',
-  /**
-   * Cached Antoine system prompt (single-slug, v1.1 format).
-   *
-   * v1.2 deprecates this in favour of `antoinePromptMap` below, which
-   * keys cache entries by slug to support per-language prompts. This
-   * key is read once on first v1.2 boot for migration, then deleted.
-   * New code should NOT write to this key.
-   */
-  antoinePrompt: 'ckm_antoine_prompt',
-  /**
-   * Cached Antoine system prompts keyed by slug (v1.2 format). JSON map
-   * `Record<slug, CacheEntry>` where each entry is either
-   *   `{ status: 'ok', body, version, cachedAt }` or
-   *   `{ status: 'not_found', checkedAt }`.
-   * The `not_found` branch is set on a 404 from the prompt fetch and
-   * drives the partial-language banner UX in v1.2.
-   */
-  antoinePromptMap: 'ckm_antoine_prompt_map',
   /**
    * User's selected language (BCP 47 code, e.g. 'en', 'fr'). Single source
    * of truth: `useI18nStore` writes here on every setLanguage(). v1.1 only
@@ -116,13 +58,6 @@ export const STORAGE_KEYS = {
    */
   sitePages: 'ckm_site_pages',
 } as const;
-
-/**
- * Slug for the on-device Antoine system prompt as authored in the web
- * admin UI. Server filters by runtime — `device` prompts are returned
- * here; `server` prompts return 404 by design.
- */
-export const ANTOINE_PROMPT_SLUG = 'antoine-system-prompt';
 
 /**
  * Site-page slugs used by the in-app legal pages. Each maps to a

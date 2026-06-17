@@ -651,3 +651,54 @@ raw/
 - `wiki/concepts/on-device-inference.md` (the pattern)
 - `wiki/decisions/llama-rn-integration.md` (the choices made)
 - Append a `wiki/log.md` entry summarising
+
+## 2026-06-17 — Backend-chat pivot executed (items 2–5; item 1 verified)
+
+Executed the API pivot from on-device inference to backend chat
+(`feature/ck-mob/backend-chat-pivot`), per shared-context `mobile-needs.md`
+[2026-06-15] and `decisions.md` [2026-06-15]. Items 1 (remove llama.rn) had
+been started by the two prior commits on the branch; this session finished the
+orphan cleanup and items 2–5.
+
+**New modules**
+
+- `src/services/webBackendAuth.ts` — `cookieAuthHeaders()`; chat/conversation
+  endpoints (E/F) authenticate via the `access_token` cookie, not Bearer.
+- `src/services/dataStream.ts` — pure Vercel AI SDK data-stream v1 parser.
+- `src/services/chatService.ts` — `streamChat()` over XMLHttpRequest (RN fetch
+  can't stream response bodies); pipes `0:` text deltas live.
+- `src/services/conversationService.ts` — `/api/conversations` F.1–F.6 CRUD,
+  cookie auth.
+
+**Changed**
+
+- `apiClient.ts` — added `auth: 'cookie'` mode (refresh-retry re-presents the
+  cookie); default stays Bearer.
+- `useAntoine.ts` — rewritten from the stub into the chat orchestrator
+  (ensure conversation → persist user msg → stream → commit), with abort +
+  plain-language error alerts (`chat.errorTitle/errorGeneric/errorOffline`,
+  added to en + fr).
+- `conversationStore.ts` — removed the dead on-device RAG slice; backend is now
+  source of truth (fetch on hydrate/setActive, SQLite fallback when offline);
+  best-effort backend write-through on every mutation using the existing
+  `isSynced` flag.
+- `config.ts` — removed dead prompt constants (`ANTOINE_PROMPT_SLUG`,
+  `antoinePrompt`, `antoinePromptMap`).
+- Deleted orphaned `plugins/withBackgroundDownload/` (GGUF download service —
+  was unregistered by `ef9a373`, now removed from source).
+
+**Tests (+68)** dataStream, webBackendAuth, chatService (fake XHR),
+conversationService, conversationStore.backend, and the useAntoine integration
+suite. Updated the existing streaming test to mock the new backend
+write-through. 110 → 178 passing (gate ≥173).
+
+**Verification** — pnpm install exit 0 (0 llama refs); `expo prebuild --clean
+-p android` exit 0 + regenerated android/ free of rnllama/withBackgroundDownload
+/FOREGROUND_SERVICE_DATA_SYNC; `pnpm test` 178/29; tsc + lint clean. Manual
+on-device smoke test NOT run (no device/backend in this env).
+
+**Flagged** — privacy invariant ("content never leaves the device") is
+intentionally reversed by this pivot; mobile CLAUDE.md + `privacy-invariant`
+wiki page still describe the old posture and need updating. Per-conversation
+language override + cross-device offline mirror are SQLite-only gaps logged in
+mobile-needs.md.

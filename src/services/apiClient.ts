@@ -3,8 +3,10 @@
  *
  * Responsibilities:
  *   - Build full URLs from `API_BASE_URL` + a relative path.
- *   - Inject `Authorization: Bearer ${accessToken}` from authStore on
- *     every request (when a token is present).
+ *   - Inject the access token from authStore on every request (when a
+ *     token is present) — as `Authorization: Bearer` by default, or as the
+ *     `access_token` cookie when `auth: 'cookie'` is passed (chat +
+ *     conversation endpoints, see the `auth` option below).
  *   - JSON in / JSON out. Sets `Content-Type: application/json`,
  *     stringifies body, parses response.
  *   - Single-flight 401 → /auth/refresh → retry. If 5 requests 401
@@ -49,11 +51,22 @@ interface RequestOptions {
   /** Body for non-GET requests; will be JSON.stringified. */
   body?: unknown;
   /**
-   * If true, do NOT inject the Authorization header even if an access
-   * token exists. Used by /auth/refresh, /auth/login, /auth/register,
-   * etc. that don't need (or shouldn't have) a Bearer token.
+   * If true, do NOT inject the auth header even if an access token exists.
+   * Used by /auth/refresh, /auth/login, /auth/register, etc. that don't
+   * need (or shouldn't have) a token.
    */
   skipAuth?: boolean;
+  /**
+   * How the access token is presented to the backend.
+   *   - 'bearer' (default): `Authorization: Bearer <token>` — the mobile
+   *     Endpoints A–D (prompts, RAG, feature-flags, feedback).
+   *   - 'cookie': `Cookie: access_token=<token>` — the chat + conversation
+   *     surface (api-contracts.md Endpoints E and F) whose
+   *     `authenticateOrGuest` middleware reads the JWT from the cookie, not
+   *     an Authorization header. The 401-refresh-retry below re-presents
+   *     the refreshed token in the same form.
+   */
+  auth?: 'bearer' | 'cookie';
   /**
    * If true, do NOT trigger the 401-refresh-retry loop. Used internally
    * by the refresh call itself to prevent infinite recursion.
@@ -68,6 +81,13 @@ interface RequestOptions {
    * timeout has already returned a fallback result.
    */
   signal?: AbortSignal;
+}
+
+/** Build the auth header for the chosen presentation form. */
+function authHeader(auth: 'bearer' | 'cookie', token: string): Record<string, string> {
+  return auth === 'cookie'
+    ? { Cookie: `access_token=${token}` }
+    : { Authorization: `Bearer ${token}` };
 }
 
 /** Single in-flight refresh promise (single-flight guard). */
@@ -129,7 +149,14 @@ async function getRefreshedAccessToken(): Promise<string> {
  * error on failure.
  */
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, skipAuth = false, skipRefresh = false, signal } = options;
+  const {
+    method = 'GET',
+    body,
+    skipAuth = false,
+    skipRefresh = false,
+    signal,
+    auth = 'bearer',
+  } = options;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
@@ -140,7 +167,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
   if (!skipAuth) {
     const token = useAuthStore.getState().token;
-    if (token) headers.Authorization = `Bearer ${token}`;
+    if (token) Object.assign(headers, authHeader(auth, token));
   }
 
   const url = path.startsWith('http') ? path : `${API_BASE_URL}${path}`;
@@ -166,7 +193,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (res.status === 401 && !skipRefresh && !skipAuth) {
     try {
       const newToken = await getRefreshedAccessToken();
-      const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
+      const retryHeaders = { ...headers, ...authHeader(auth, newToken) };
       res = await fetch(url, {
         method,
         headers: retryHeaders,
