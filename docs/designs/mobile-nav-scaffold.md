@@ -277,6 +277,7 @@ Press-scale 0.97 on rows and the back chevron.
 | DX Review     | `/plan-devex-review`  | Developer experience gaps       | 0    | —      | not run                                                                                                            |
 
 - **CROSS-MODEL:** Three outside-voice passes total (Claude subagent — Codex not installed). CEO: D5 nested stack + E3 timing. Eng: confirmed `segments` match, caught hidden-tab route leak + T5/T7 conflict (→ D4), flagged headerShown (→ design review). Design: text-spec on the 3 focus areas resolved the headerShown gap.
-- **VERDICT:** CEO + ENG + DESIGN CLEARED — ready to implement.
+- **VERDICT:** CEO + ENG + DESIGN CLEARED — implemented (commit `94cbfeb`).
+- **DEVICE-VERIFIED (2026-06-17, Moto G86 Power):** tab bar persists on placeholder, custom copper back works (chevron + hardware back), 3 sections / 11 "Soon" rows render, no native header. Automated: tsc + lint clean, 194 jest tests.
 
 NO UNRESOLVED DECISIONS
