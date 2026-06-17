@@ -35,12 +35,29 @@ app/
     _layout.tsx                Stack with no header (modal-style)
     index.tsx                  Auto-download experience with rotating tips
   (tabs)/
-    _layout.tsx                Bottom tabs (Chat, Settings)
+    _layout.tsx                Bottom tabs (Chat, Kitchen, Settings)
     chat.tsx                   Chat (Antoine)
+    kitchen/
+      _layout.tsx              Stack, headerShown:false; redirects to chat when
+                               KITCHEN_ENABLED is false (store-review build)
+      index.tsx                Kitchen hub — grouped list of 11 placeholder
+                               features (KitchenHubScreen)
+      [slug].tsx               Placeholder screen for an un-ported feature
+                               (PlaceholderScreen); unknown slug → fallback
     settings.tsx               Settings (account, model, sign out)
 ```
 
 The `(downloading)` group was added in PR #3 to host the dedicated download experience and is auto-routed from Settings whenever a download starts (PR #5).
+
+The `(tabs)/kitchen` stack (the Kitchen hub + placeholder destinations) mirrors
+the web sidebar so web features can be ported in one at a time. Config: single
+source of truth in `src/constants/kitchenNav.ts` (11 items × 3 sections, each
+with a `status: 'placeholder' | 'live'`). RouteGuard decision logic was
+extracted to the pure, unit-tested `src/navigation/routeGuard.ts`; the
+`(tabs)/kitchen` ack-bypass relaxes ONLY food-safety (after auth + email
+verify), and only when the build-time `KITCHEN_ENABLED` gate is on. Full design
+
+- review history: `docs/designs/mobile-nav-scaffold.md`.
 
 ## Screens (key wiring)
 

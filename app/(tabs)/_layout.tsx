@@ -2,6 +2,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
+import { KITCHEN_ENABLED } from '@/constants/config';
 import { fonts, palette, theme } from '@/constants/theme';
 
 export default function TabsLayout() {
@@ -20,6 +21,16 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           tabBarIcon: ({ color }) => <Feather name="message-circle" size={22} color={color} />,
+        }}
+      />
+      {/* Build-gate (D4): when KITCHEN_ENABLED is false, hide the tab AND the
+          stack layout redirects the routes to chat, so nothing leaks. */}
+      <Tabs.Screen
+        name="kitchen"
+        options={{
+          title: 'Kitchen',
+          href: KITCHEN_ENABLED ? undefined : null,
+          tabBarIcon: ({ color }) => <Feather name="grid" size={22} color={color} />,
         }}
       />
       <Tabs.Screen

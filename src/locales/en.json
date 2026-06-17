@@ -230,5 +230,38 @@
     "photoPermissionBody": "Allow photo access in system settings to attach a screenshot.",
     "genericErrorTitle": "Couldn't send",
     "genericErrorBody": "Something went wrong on our side. Please try again."
+  },
+  "kitchen": {
+    "title": "Kitchen",
+    "soon": "Soon",
+    "back": "Back to Kitchen",
+    "sections": {
+      "creativeLabs": "Creative Labs",
+      "kitchenOperations": "Kitchen Operations",
+      "community": "Community"
+    },
+    "items": {
+      "recipeLab": "Recipe Lab",
+      "patisserieLab": "Patisserie Lab",
+      "spiritsLab": "Spirits Lab",
+      "myRecipeBook": "My Recipe Book",
+      "stockRoom": "Stock Room",
+      "purchasing": "Purchasing",
+      "menuIntelligence": "Menu Intelligence",
+      "kitchenCopilot": "Kitchen Copilot",
+      "wasteIntelligence": "Waste Intelligence",
+      "culinaireRecipeBook": "CulinAIre Recipe Book",
+      "theBench": "The Bench"
+    },
+    "placeholder": {
+      "note": "{{feature}} is still in the kitchen — arriving soon."
+    },
+    "unknown": {
+      "title": "Not on the menu",
+      "note": "We could not find that page. Head back to the kitchen."
+    },
+    "a11y": {
+      "soonRow": "{{feature}}, coming soon"
+    }
   }
 }

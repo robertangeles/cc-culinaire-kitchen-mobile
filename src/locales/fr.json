@@ -230,5 +230,38 @@
     "photoPermissionBody": "Autorisez l'accès aux photos dans les réglages système pour joindre une capture d'écran.",
     "genericErrorTitle": "Envoi impossible",
     "genericErrorBody": "Quelque chose a mal tourné de notre côté. Veuillez réessayer."
+  },
+  "kitchen": {
+    "title": "Cuisine",
+    "soon": "Bientôt",
+    "back": "Retour à la cuisine",
+    "sections": {
+      "creativeLabs": "Laboratoires créatifs",
+      "kitchenOperations": "Opérations de cuisine",
+      "community": "Communauté"
+    },
+    "items": {
+      "recipeLab": "Labo recettes",
+      "patisserieLab": "Labo pâtisserie",
+      "spiritsLab": "Labo spiritueux",
+      "myRecipeBook": "Mon livre de recettes",
+      "stockRoom": "Réserve",
+      "purchasing": "Achats",
+      "menuIntelligence": "Intelligence menu",
+      "kitchenCopilot": "Copilote de cuisine",
+      "wasteIntelligence": "Intelligence anti-gaspillage",
+      "culinaireRecipeBook": "Livre de recettes CulinAIre",
+      "theBench": "Le comptoir"
+    },
+    "placeholder": {
+      "note": "{{feature}} mijote encore en cuisine — bientôt disponible."
+    },
+    "unknown": {
+      "title": "Introuvable",
+      "note": "Page introuvable. Retournez à la cuisine."
+    },
+    "a11y": {
+      "soonRow": "{{feature}}, bientôt disponible"
+    }
   }
 }
