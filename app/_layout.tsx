@@ -23,8 +23,10 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { KITCHEN_ENABLED } from '@/constants/config';
 import { db } from '@/db/client';
 import migrations from '@/db/migrations/migrations';
+import { resolveRouteGuardRedirect } from '@/navigation/routeGuard';
 // Side-effect import: initializes i18next synchronously at module load,
 // so any `useTranslation()` consumer in the tree below has a ready
 // instance. The boot effect (applyDeviceLocaleIfStoreEmpty) runs after
@@ -58,59 +60,23 @@ function RouteGuard() {
 
   useEffect(() => {
     if (!isHydrated) return;
-    // (legal) is reachable in every auth state — Terms + Privacy must be
-    // readable before sign-up (ToS acceptance) AND after. Short-circuit
-    // before any of the auth/onboarding/food-safety redirects kick in.
-    if (segments[0] === '(legal)') return;
-    // (feedback) is also reachable in every auth state — entry points exist
-    // on Login (anon path: server stores user_id=NULL, is_anonymous=true)
-    // AND on Settings (auth path). Per outside-voice #7 + 2026-05-04 plan:
-    // the demo APK population is exactly the people hitting signup/billing
-    // bugs, so gating to post-auth would lose the highest-value pre-launch
-    // signal.
-    if (segments[0] === '(feedback)') return;
-    const inAuthFlow =
-      segments[0] === '(welcome)' || segments[0] === '(auth)' || segments[0] === '(onboarding)';
-    const onFoodSafety = segments[0] === '(food-safety)';
-    const onVerifyEmail = segments[0] === '(auth)' && segments[1] === 'verify-email';
-
-    if (!user) {
-      // Logged out: only welcome + (auth)/* + (onboarding) are accessible.
-      // Also kick out of (food-safety) — that gate is post-auth only.
-      if (!inAuthFlow) router.replace('/(welcome)');
-      return;
-    }
-
-    // Logged in but unverified: force the verify-email screen until they
-    // confirm. They can sign out from there to switch accounts.
-    if (!user.emailVerified) {
-      if (!onVerifyEmail) router.replace('/(auth)/verify-email');
-      return;
-    }
-
-    // Verified but not yet acked food-safety this session: force the
-    // ack screen. Skip when already on it to avoid a redirect loop.
-    const ackRequired = isFoodSafetyAckRequired({ ackedThisSession });
-    if (ackRequired) {
-      // expo-router's typed-routes cache doesn't pick up new route groups
-      // until the dev server regenerates types — cast as never until then.
-      if (!onFoodSafety) router.replace('/(food-safety)' as never);
-      return;
-    }
-
-    // Fully verified + acked: kick out of welcome + (auth) + (food-safety)
-    // + (onboarding) screens — chat is the destination once we're past
-    // the auth/safety gates. Onboarding existed to host the on-device
-    // model download; with the backend-chat pivot it's a passthrough.
-    if (
-      segments[0] === '(welcome)' ||
-      segments[0] === '(auth)' ||
-      segments[0] === '(food-safety)' ||
-      segments[0] === '(onboarding)' ||
-      segments[0] === '(downloading)'
-    ) {
-      router.replace('/(tabs)/chat');
-    }
+    // Decision logic lives in a pure, unit-tested function (see
+    // src/navigation/routeGuard.ts). It encodes the gate precedence:
+    // (legal)/(feedback) reachable in any auth state; logged-out → welcome;
+    // unverified → verify-email; the (tabs)/kitchen ack-bypass (after auth +
+    // verify, before food-safety, gated on KITCHEN_ENABLED); then the
+    // food-safety ack; then kicking onboarding/auth groups to chat.
+    const target = resolveRouteGuardRedirect({
+      segments,
+      isHydrated,
+      hasUser: !!user,
+      emailVerified: !!user?.emailVerified,
+      ackRequired: isFoodSafetyAckRequired({ ackedThisSession }),
+      kitchenEnabled: KITCHEN_ENABLED,
+    });
+    // expo-router's typed-routes cache doesn't pick up new route groups until
+    // the dev server regenerates types — cast as never until then.
+    if (target) router.replace(target as never);
   }, [user, isHydrated, segments, router, ackedThisSession]);
 
   return null;

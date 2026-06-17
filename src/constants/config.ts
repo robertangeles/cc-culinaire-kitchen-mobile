@@ -20,6 +20,7 @@ export const ASSISTANT_NAME = 'Antoine';
 const extra = (Constants.expoConfig?.extra ?? {}) as {
   apiBaseUrl?: string;
   googleWebClientId?: string;
+  kitchenEnabled?: boolean;
 };
 
 // IMPORTANT: use the `www` host. The apex `culinaire.kitchen` 301-redirects
@@ -32,6 +33,25 @@ export const API_BASE_URL: string =
 
 export const GOOGLE_WEB_CLIENT_ID: string =
   extra.googleWebClientId ?? process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+
+/**
+ * Build-time gate for the Kitchen tab + its placeholder routes. Default
+ * true (internal/dev/production builds show Kitchen). The store-review EAS
+ * profile sets `EXPO_PUBLIC_KITCHEN_ENABLED=false` so a Play reviewer never
+ * sees the not-yet-built "Soon" screens.
+ *
+ * Build-time, NOT a runtime server flag: the gate is a property of the
+ * BUILD (deterministic, no flicker, can target one variant). When false it
+ * must gate ALL of: the tab, the kitchen routes (they redirect to chat),
+ * and the RouteGuard ack-bypass — hiding the tab alone leaves the routes
+ * deep-linkable. See `docs/designs/mobile-nav-scaffold.md` (D2 + D4).
+ *
+ * `process.env.EXPO_PUBLIC_*` is inlined at build time, so the string
+ * comparison is the source of truth; the only "false" value is the literal
+ * string 'false'.
+ */
+export const KITCHEN_ENABLED: boolean =
+  extra.kitchenEnabled ?? process.env.EXPO_PUBLIC_KITCHEN_ENABLED !== 'false';
 
 export const STORAGE_KEYS = {
   authToken: 'ckm_auth_token',

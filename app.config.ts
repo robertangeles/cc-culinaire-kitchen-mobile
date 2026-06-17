@@ -86,6 +86,11 @@ const config: ExpoConfig = {
     // See lessons.md "apex strips Bearer auth on GETs".
     apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://www.culinaire.kitchen',
     googleWebClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '',
+    // Build-time gate for the Kitchen tab + placeholder routes. Default true;
+    // the store-review EAS profile sets EXPO_PUBLIC_KITCHEN_ENABLED=false so a
+    // Play reviewer never hits the not-yet-built "Soon" screens. Read at
+    // runtime via src/constants/config.ts KITCHEN_ENABLED.
+    kitchenEnabled: process.env.EXPO_PUBLIC_KITCHEN_ENABLED !== 'false',
     // EAS project link — durable identity for all cloud builds. Created via
     // `eas init` 2026-05-05 under @robangeles/cc-culinaire-kitchen-mob.
     // Dynamic config means eas-cli can't auto-write this; manual is fine.
