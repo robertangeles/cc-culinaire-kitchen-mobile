@@ -106,12 +106,15 @@ one-line status flip + swapping the placeholder for a real screen.
   deep-link path: `ackedThisSession` resets every cold launch
   (`app/_layout.tsx:54-57`), so a cold-launch deep link is swallowed by the
   food-safety ack gate (`app/_layout.tsx:93-99` → `(food-safety)`). Sub-scope:
-  - [D3] Short-circuit the ack gate for the kitchen sub-route:
-    `if (segments[0] === '(tabs)' && segments[1] === 'kitchen') return;`
-    placed alongside the `(legal)` / `(feedback)` short-circuits at
-    `app/_layout.tsx:64,71`. Authed cold-launch deep link reaches the
-    placeholder; unauthed → falls through to `(welcome)` (gated like chat).
-    Bypass is acceptable because placeholders carry no Antoine content.
+  - [D3 — corrected at eng review] Short-circuit the ack gate for the kitchen
+    sub-route: `if (segments[0] === '(tabs)' && segments[1] === 'kitchen') return;`
+    placed **after** the auth + email-verify checks (`app/_layout.tsx:89`) and
+    **before** the ack check (`:93`) — NOT alongside `(legal)`/`(feedback)` at
+    `:64,71`. Those return before the `!user` check, so placing it there would
+    let a logged-out deep link reach Kitchen (auth bypass). Correct placement:
+    unauthed → `(welcome)`, unverified → verify-email, authed+verified → reaches
+    the placeholder skipping ONLY food-safety. Bypass is acceptable because
+    placeholders carry no Antoine content.
   - TODO (below): re-gate (require ack / resume-after-ack) any kitchen screen
     that becomes AI-backed and real (e.g. Kitchen Copilot).
 - i18n: labels resolved via `t(labelKey)` (react-i18next, matching
@@ -121,14 +124,34 @@ one-line status flip + swapping the placeholder for a real screen.
 - Tests (unit + integration): hub renders 11 rows under correct sections;
   tapping a row navigates to its slug; placeholder resolves a known slug;
   unknown slug renders fallback, does not crash; "Soon" chip shows only for
-  `status: 'placeholder'`; RouteGuard lets an authed user reach a `(kitchen)`
-  route without bouncing to chat/food-safety (in-app + deep-link paths).
+  `status: 'placeholder'`.
+- **CRITICAL regression test (RouteGuard auth-state matrix)** — modifying
+  RouteGuard changes existing auth behavior, so this is mandatory. Assert all
+  three cold-launch deep-link paths into `/(tabs)/kitchen/<slug>`:
+  (a) no user → redirected to `(welcome)`;
+  (b) user, email unverified → redirected to `(auth)/verify-email`;
+  (c) user, verified, ack NOT done this session → reaches the placeholder
+  (food-safety bypassed). Proves the short-circuit relaxes ONLY the ack, never
+  auth. File: `__tests__/integration/routeGuardKitchen.test.tsx`.
 
-- [TODO-2 → built in this PR] Feature flag that hides the Kitchen tab for
-  store-review builds, so a Closed-Testing reviewer doesn't read the "Soon"
-  screens as broken/incomplete. Reuses the existing feature-flags mechanism
-  (`src/services/featureFlagsService.ts`); default on for internal/dev, gated
-  for the store-review variant.
+- [TODO-2 → built in this PR; mechanism corrected at eng review — D2 + D4]
+  BUILD-TIME gate for store-review builds. NOT the server `featureFlagsService`
+  (global + async + flickers — can't target one build). Instead:
+  `EXPO_PUBLIC_KITCHEN_ENABLED` surfaced via `app.config.ts`, set false on the
+  store-review EAS profile, read as a constant in `src/constants/config.ts`.
+  Default true for internal/dev/production.
+  [D4 — gate the room, not just the door] When the flag is false it must gate
+  ALL THREE, or the routes leak (a hidden tab does NOT remove the registered
+  `/(tabs)/kitchen/*` routes, and a deep link would still reach a placeholder
+  AND trigger the ack-bypass):
+  1. `app/(tabs)/_layout.tsx` — don't render the Kitchen `<Tabs.Screen>`.
+  2. `app/(tabs)/kitchen/_layout.tsx` (or index + [slug]) — `<Redirect href="/(tabs)/chat" />`
+     when `!KITCHEN_ENABLED`, so deep links can't reach the placeholders.
+  3. RouteGuard — the kitchen ack short-circuit is itself guarded by
+     `KITCHEN_ENABLED`, so the food-safety bypass cannot fire in a build where
+     Kitchen is off. Resolves the T5 ↔ T7 conflict.
+     Test: with the flag false, a deep link to `/(tabs)/kitchen/recipe-lab` lands
+     on chat, NOT a placeholder, and the ack gate is NOT bypassed.
 
 ## Deferred to TODOS.md
 
@@ -202,17 +225,58 @@ finding above. Run with Claude Code; checkbox as you ship.
   - Verify: `pnpm test` green — hub render, nav, slug resolve, Soon gating, guard pass
 - [ ] **T9 (P3, gate)** — design — Run `/plan-design-review` on the placeholder + hub before build (D4)
 
+## Design Spec (plan-design-review)
+
+Classifier: APP UI (navigation, task-focused). Calibrated to `theme.ts` + the
+"Editorial Design Standard" + the live `ChatGreeting` hero. Decisions:
+
+**Kitchen hub (`KitchenHubScreen`)**
+
+- [DD2] Each section is ONE grouped inset surface: `paperDeep` rounded
+  container holding its rows, `paperEdge` hairline dividers between rows.
+  `Eyebrow` (copperDeep, uppercase) header above each surface. Chef's-notebook
+  table-of-contents feel. NOT a card-per-feature mosaic (hard-rejection #7).
+- Row anatomy: leading Feather icon (`inkMuted`) + label (`type.ui`, `ink`) +
+  trailing — `SoonChip` on placeholder rows, chevron (`inkFaint`) on live rows
+  only. Min height 44pt (`layout.tap`).
+- `SoonChip`: `copperDeep` text on `copperTint` fill, small pill, `type.overline`.
+  No left-border accent (slop #8), no emoji (slop #7). Contrast ≥ 4.5:1.
+- Hub title "Kitchen" rendered inline in Fraunces (own header, not native).
+- a11y: each row `accessibilityRole="button"`, `accessibilityLabel` e.g.
+  "Recipe Lab, coming soon" (placeholder) / "My Recipe Book" (live).
+
+**Placeholder (`PlaceholderScreen`)**
+
+- [DD3] Calm, intentional, no dead-end feel. Hierarchy: feature's Feather icon
+  in `copper` at display size (visual anchor) → feature name (`type.h2`,
+  Fraunces) → one calm head-chef line (`type.body`, `inkMuted`), sentence case,
+  no emoji, e.g. "Recipe Lab is still in the kitchen — arriving soon." →
+  `Eyebrow` section overline. NO CTA button (return via the header back).
+- Microcopy register: calm head chef (matches Antoine voice). Never "Coming
+  soon!", never food puns.
+
+**Nested-stack header / back affordance**
+
+- [DD4] `app/(tabs)/kitchen/_layout.tsx` Stack `headerShown: false`. Hub draws
+  its own "Kitchen" title. Placeholder draws a minimal custom top row: copper
+  back chevron (44pt tap target, `accessibilityLabel="Back to Kitchen"`) +
+  section `Eyebrow`. No native header (would clash with Fraunces/copper, like
+  ChatHeader avoids). Gesture back still works; the chevron makes it visible.
+
+Motion: hub rows + placeholder use `FadeInDown.duration(240)` (per CLAUDE.md).
+Press-scale 0.97 on rows and the back chevron.
+
 ## GSTACK REVIEW REPORT
 
-| Review        | Trigger               | Why                             | Runs | Status | Findings                                                                                |
-| ------------- | --------------------- | ------------------------------- | ---- | ------ | --------------------------------------------------------------------------------------- |
-| CEO Review    | `/plan-ceo-review`    | Scope & strategy                | 1    | clean  | SELECTIVE_EXPANSION; 3 proposals, 2 accepted (E1, E3), 1 deferred (E2); 0 critical gaps |
-| Codex Review  | `/codex review`       | Independent 2nd opinion         | 0    | —      | not run                                                                                 |
-| Eng Review    | `/plan-eng-review`    | Architecture & tests (required) | 0    | —      | not run                                                                                 |
-| Design Review | `/plan-design-review` | UI/UX gaps                      | 0    | —      | not run                                                                                 |
-| DX Review     | `/plan-devex-review`  | Developer experience gaps       | 0    | —      | not run                                                                                 |
+| Review        | Trigger               | Why                             | Runs | Status | Findings                                                                                                           |
+| ------------- | --------------------- | ------------------------------- | ---- | ------ | ------------------------------------------------------------------------------------------------------------------ |
+| CEO Review    | `/plan-ceo-review`    | Scope & strategy                | 1    | clean  | SELECTIVE_EXPANSION; 3 proposals, 2 accepted (E1, E3), 1 deferred (E2); 0 critical gaps                            |
+| Codex Review  | `/codex review`       | Independent 2nd opinion         | 0    | —      | not run                                                                                                            |
+| Eng Review    | `/plan-eng-review`    | Architecture & tests (required) | 1    | clean  | FULL_REVIEW; 3 findings folded (D2 build-time gate, D3 guard placement, D4 route-leak); 0 critical gaps            |
+| Design Review | `/plan-design-review` | UI/UX gaps                      | 1    | clean  | 6/10 → 9/10; 3 decisions (grouped inset rows, calm placeholder, headerShown:false custom header) + a11y/slop specs |
+| DX Review     | `/plan-devex-review`  | Developer experience gaps       | 0    | —      | not run                                                                                                            |
 
-- **CROSS-MODEL:** Outside voice (Claude subagent — Codex not installed) raised 5 points; 2 changed the plan (D5 nested stack absorbing the tab-bar/route-group bug; E3-timing re-examined and kept by user at D6). Spec review converged 9/10 over 2 rounds.
-- **VERDICT:** CEO CLEARED — ready for eng review. Eng review required before implement.
+- **CROSS-MODEL:** Three outside-voice passes total (Claude subagent — Codex not installed). CEO: D5 nested stack + E3 timing. Eng: confirmed `segments` match, caught hidden-tab route leak + T5/T7 conflict (→ D4), flagged headerShown (→ design review). Design: text-spec on the 3 focus areas resolved the headerShown gap.
+- **VERDICT:** CEO + ENG + DESIGN CLEARED — ready to implement.
 
 NO UNRESOLVED DECISIONS

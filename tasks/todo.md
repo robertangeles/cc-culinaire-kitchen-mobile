@@ -323,3 +323,31 @@ Source: `~/.gstack/projects/robertangeles-cc-culinaire-kitchen-mobile/ceo-plans/
 - **Why.** Faster rollback if channel breaks post-launch; declined for PR-A in favor of revert-PR pattern.
 - **Effort.** Human ~10 min web.
 - **Priority.** P3 (consider if Resend or PG issues become recurring).
+
+---
+
+## From CEO review — mobile nav scaffold (2026-06-17)
+
+### Re-gate food-safety ack for AI-backed Kitchen screens
+
+- **What.** When any Kitchen placeholder becomes a real, AI-backed screen
+  (e.g. Kitchen Copilot), remove its `(tabs)/kitchen` ack-bypass and require the
+  food-safety acknowledgement (or resume-after-ack) before it renders.
+- **Why.** The scaffold bypasses the per-session food-safety ack for kitchen
+  routes because placeholders carry no Antoine content. That assumption breaks
+  the moment a kitchen screen produces culinary AI output.
+- **Context.** Bypass lives in `app/_layout.tsx` RouteGuard as
+  `segments[0]==='(tabs)' && segments[1]==='kitchen'`. Scaffold shipped 2026-06-17.
+- **Effort.** Human ~1h / CC ~15min.
+- **Priority.** P1 — blocks shipping the first AI-backed Kitchen feature.
+- **Depends on.** First real Kitchen feature.
+
+### "Open on web" CTA per placeholder (E2)
+
+- **What.** Each placeholder gets a copper CTA that opens the matching web
+  feature (e.g. culinaire.kitchen/recipe-lab) in the browser.
+- **Why.** Turns a "coming soon" wait into immediate value via the web app.
+- **Context.** Deferred at the cherry-pick ceremony — sends users off-app and
+  needs a confirmed web URL per slug; config already has room for a `webUrl`.
+- **Effort.** Human ~2h / CC ~15min.
+- **Priority.** P3.
