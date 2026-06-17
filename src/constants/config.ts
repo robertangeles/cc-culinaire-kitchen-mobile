@@ -38,24 +38,6 @@ export const STORAGE_KEYS = {
   authRefreshToken: 'ckm_auth_refresh_token',
   authUser: 'ckm_auth_user',
   /**
-   * Cached Antoine system prompt (single-slug, v1.1 format).
-   *
-   * v1.2 deprecates this in favour of `antoinePromptMap` below, which
-   * keys cache entries by slug to support per-language prompts. This
-   * key is read once on first v1.2 boot for migration, then deleted.
-   * New code should NOT write to this key.
-   */
-  antoinePrompt: 'ckm_antoine_prompt',
-  /**
-   * Cached Antoine system prompts keyed by slug (v1.2 format). JSON map
-   * `Record<slug, CacheEntry>` where each entry is either
-   *   `{ status: 'ok', body, version, cachedAt }` or
-   *   `{ status: 'not_found', checkedAt }`.
-   * The `not_found` branch is set on a 404 from the prompt fetch and
-   * drives the partial-language banner UX in v1.2.
-   */
-  antoinePromptMap: 'ckm_antoine_prompt_map',
-  /**
    * User's selected language (BCP 47 code, e.g. 'en', 'fr'). Single source
    * of truth: `useI18nStore` writes here on every setLanguage(). v1.1 only
    * reads/writes; the language has no UI effect until v1.2 ships the
@@ -76,13 +58,6 @@ export const STORAGE_KEYS = {
    */
   sitePages: 'ckm_site_pages',
 } as const;
-
-/**
- * Slug for the on-device Antoine system prompt as authored in the web
- * admin UI. Server filters by runtime — `device` prompts are returned
- * here; `server` prompts return 404 by design.
- */
-export const ANTOINE_PROMPT_SLUG = 'antoine-system-prompt';
 
 /**
  * Site-page slugs used by the in-app legal pages. Each maps to a

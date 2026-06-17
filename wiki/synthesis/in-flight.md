@@ -12,6 +12,20 @@ The single source of truth for "where we are right now". Updated at the end of e
 
 ## Status
 
+**ACTIVE: backend-chat pivot (2026-06-15 strategic reversal).** On-device
+`llama.rn` inference is retired; Antoine now answers via the web backend
+`POST /api/chat` (Vercel AI SDK data-stream) with conversation content
+persisted to `/api/conversations`. Branch `feature/ck-mob/backend-chat-pivot`.
+Code-complete + automated verification green as of 2026-06-17 (178 tests / 29
+suites, tsc + lint clean, `expo prebuild` regenerates a llama-free android
+project, `pnpm install` clean). **Open:** on-device manual smoke test (needs
+the Moto G86 + live backend) and the privacy-invariant doc reversal. Full
+detail in `docs/architecture/backend-chat.md` and shared-context
+`mobile-needs.md` [2026-06-15]. NOTE: this supersedes the on-device + privacy
+architecture described below from the v1.3 era — those notes are historical.
+
+---
+
 **v1.3 launch in flight — Closed Testing release submitted to Google Play (2026-05-05).** Production AAB build `28e99d30` (versionCode 1, versionName 1.3.0) uploaded to the Closed Testing track under `com.culinairekitchen.mobile.lite` on `@robangeles`'s personal Play Console account. Submission cleared the Foreground Service declaration (YouTube Unlisted demo video URL) + Data Safety + Content Rating + Target Audience + Ads declaration + App Category + Privacy URL + Account-deletion URL. Now in Google's automated quick-check phase (~13 min) followed by human review (1–7 days). Personal-account 14-day Closed-Testing rule applies — Production unlock requires ≥12 opted-in testers running for ≥14 days; currently 6 testers on the email list.
 
 **v1.3 PR-A merged earlier as PR #27 (`db21c61`).** In-app feedback / bug submission feature shipped + device-verified end-to-end on the Moto G86 Power (anon submission from Login → 201 from prod → email landed in `ran@robertangeles.com` via the async Resend forwarder). Web side fulfilled the same day (commit `2a307de`): `POST /api/mobile/feedback` deployed, `ckm_feedback` table created.

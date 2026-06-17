@@ -4,7 +4,6 @@
     "name": "Français",
     "$comment": "v1.2 FULL TRANSLATION — every namespace translated 2026-05-03 with a French speaker reviewing in real-time. Brand marks ('Antoine', 'CulinAIre Kitchen', 'LITE') stay as literals — they are names, not translatable copy. Numerals follow French convention (5,9 Go not 5.9 GB; non-breaking space before % and ? per French typography)."
   },
-
   "auth": {
     "signInLabel": "Se connecter",
     "registerLabel": "S'inscrire",
@@ -54,7 +53,6 @@
     "mfaVerify": "Vérifier",
     "mfaBackToSignIn": "Retour à la connexion"
   },
-
   "chat": {
     "composerPlaceholder": "Message à Antoine",
     "sendMessageLabel": "Envoyer le message",
@@ -86,9 +84,11 @@
     "headerDownloadModel": "Télécharger Antoine",
     "moreActions": "Plus d'actions",
     "partialLanguageTitle": "Les réponses sont en anglais pour l'instant",
-    "partialLanguageBody": "Nous n'avons pas encore publié d'Antoine en {{language}}. Votre conversation fonctionne toujours — Antoine répond simplement en anglais en attendant la traduction en {{language}}."
+    "partialLanguageBody": "Nous n'avons pas encore publié d'Antoine en {{language}}. Votre conversation fonctionne toujours — Antoine répond simplement en anglais en attendant la traduction en {{language}}.",
+    "errorTitle": "Antoine n'a pas pu répondre",
+    "errorGeneric": "Un problème est survenu en joignant la cuisine. Réessayez dans un instant.",
+    "errorOffline": "Vous êtes hors ligne. Reconnectez-vous pour continuer avec Antoine."
   },
-
   "settings": {
     "title": "Paramètres",
     "kitchen": "Votre cuisine.",
@@ -119,7 +119,6 @@
     "feedbackCountBadge": "{{count}} envoyé(s)",
     "feedbackCountBadgeMany": "100+ envoyés"
   },
-
   "legal": {
     "termsTitle": "Conditions",
     "privacyTitle": "Politique de confidentialité",
@@ -130,20 +129,16 @@
     "errorBody": "Vérifiez votre connexion et réessayez. Si le problème persiste, la page est en cours de mise à jour de notre côté.",
     "tryAgain": "Réessayer"
   },
-
   "errors": {},
-
   "actions": {
     "cancel": "Annuler"
   },
-
   "chef": {
     "movingIn": "{{assistantName}} s'installe.",
     "downloadingBody": "Un seul téléchargement, puis tout se passe sur votre téléphone — aucune connexion internet nécessaire pour cuisiner avec {{assistantName}}.",
     "wifiOnly": "Wi-Fi uniquement",
     "cellularAllowed": "Données mobiles autorisées"
   },
-
   "welcome": {
     "slide1Title": "Un chef dans chaque poche.",
     "slide1Body": "CulinAIre Kitchen est votre intelligence culinaire sur l'appareil. Calme, précise, et rien qu'à vous.",
@@ -156,7 +151,6 @@
     "skipButton": "Passer",
     "getStarted": "Commencer"
   },
-
   "foodSafety": {
     "eyebrow": "AVANT DE CUISINER",
     "title": "Un mot avant de commencer.",
@@ -174,7 +168,6 @@
     "fineprint": "En touchant ci-dessous, vous confirmez avoir lu ces points et acceptez la section sécurité alimentaire des conditions d'utilisation.",
     "ackButton": "J'ai compris"
   },
-
   "onboarding": {
     "welcomeMessage": "Bienvenue, {{firstName}}",
     "headline": "Votre chef tourne <script>sur ce téléphone.</script>",
@@ -197,7 +190,6 @@
     "cellularCancel": "Annuler",
     "cellularAllow": "Autoriser les données mobiles"
   },
-
   "feedback": {
     "headerTitle": "Envoyer un commentaire",
     "openEyebrow": "QU'AVEZ-VOUS EN TÊTE ?",
