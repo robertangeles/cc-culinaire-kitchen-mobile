@@ -6,9 +6,32 @@ Context** / **Effort** / **Depends on**.
 
 ---
 
+## ⚠️ Status — refreshed 2026-06-18 after the backend-chat pivot (`777e51e`)
+
+The pivot retired on-device inference. Several entries below describe **deleted
+code** and are quarantined under "Obsolete after the backend-chat pivot" at the
+bottom — do not re-open them. The live priorities are:
+
+1. **Rewrite the privacy posture docs** — CLAUDE.md privacy section +
+   `wiki/concepts/privacy-invariant.md` still claim "content never leaves the
+   device"; the pivot reversed that. (No code; unblocks immediately.)
+2. **On-device smoke test** of the backend chat flow on the Moto G86.
+3. **react-native-iap billing** (P1 below) — still the real monetization gap.
+4. **Nav-scaffold P1** — re-gate the food-safety ack for AI-backed Kitchen
+   screens (bottom section, "From CEO review — mobile nav scaffold").
+
+Detail in [`docs/architecture/backend-chat.md`](../docs/architecture/backend-chat.md)
+and `wiki/synthesis/in-flight.md`.
+
+---
+
 ## P1 — Real auth & subscription
 
 ### Wire real Google Sign-In via `@react-native-google-signin/google-signin`
+
+> ✅ **DONE at v1.3 launch (2026-05-05).** Real Google Sign-In confirmed working
+> on the Moto G86 in the production build; EAS keystore SHA-1 registered against
+> the Android OAuth client. See `docs/play-store-launch-runbook.md`.
 
 - **What.** Replace the `googleSignIn` stub in `src/services/authService.ts`
   with real Google OAuth.
@@ -36,6 +59,10 @@ Context** / **Effort** / **Depends on**.
 
 ### Integrate `llama.rn` and ship real `inferenceService`
 
+> ❌ **OBSOLETE — backend-chat pivot (2026-06-15).** On-device inference is
+> retired; `inferenceService.ts`, `modelStore.ts`, and llama.rn are deleted.
+> Antoine answers via `POST /api/chat`. Do not re-open.
+
 - **What.** Replace the canned-response stub with `llama.rn` bindings.
   `import { initLlama, releaseAllLlama } from 'llama.rn'`.
 - **Why.** This is the entire product. Antoine has to actually run.
@@ -49,6 +76,10 @@ Context** / **Effort** / **Depends on**.
 - **Depends on.** Real `gemma-4-e4b-it.Q4_K_M.gguf` on device for testing.
 
 ### Implement real model download against the CDN
+
+> ❌ **OBSOLETE — backend-chat pivot (2026-06-15).** No model ships to the
+> device anymore; `modelDownloadService.ts` and the background-download plugin
+> are deleted. Do not re-open.
 
 - **What.** Replace the `setInterval` ticker in
   `src/services/modelDownloadService.ts` with a real download via
@@ -68,6 +99,13 @@ Context** / **Effort** / **Depends on**.
 ## P2 — Backend sync, second screen, full E2E coverage
 
 ### Zero-knowledge encrypted backup (cross-device history)
+
+> ❌ **SUPERSEDED — backend-chat pivot (2026-06-15).** This was the privacy-
+> preserving answer to "content can't leave the device." The pivot reversed
+> that invariant: conversation content now persists to the backend in
+> plaintext via `/api/conversations`. Cross-device history is the backend's
+> job now, not a client-side zero-knowledge layer. Revisit only if the privacy
+> posture is re-tightened.
 
 - **What.** Add an end-to-end encrypted backup service. Conversation content
   is encrypted client-side with a key derived from a recovery passphrase the
@@ -102,6 +140,12 @@ Context** / **Effort** / **Depends on**.
   contacts? Apple keychain integration? Just "warn loudly"?).
 
 ### Backend `/api/conversations/sync` (metadata only)
+
+> ❌ **SUPERSEDED — backend-chat pivot (2026-06-15).** `conversationService.ts`
+> already does full `/api/conversations` CRUD (content, not just metadata) with
+> the backend as source of truth and SQLite as an offline mirror. A separate
+> metadata-only sync service is no longer the model. Remaining gap is the
+> partial cross-device offline mirror (see in-flight.md "known gaps").
 
 - **What.** Add a `src/services/syncService.ts` that periodically POSTs
   conversation **metadata** (id, createdAt, updatedAt, deviceId,
@@ -182,6 +226,12 @@ Context** / **Effort** / **Depends on**.
 ---
 
 ## P1 — First-launch flow redesign + entertainment screen during model download
+
+> ❌ **OBSOLETE — backend-chat pivot (2026-06-15).** There is no 6–7 GB model
+> download anymore, so the entertainment-during-download premise is gone. A
+> first-launch greeting/empty-state redesign may still be worth doing, but it
+> must be re-scoped against the backend-chat flow (no `modelReady` gate, no
+> `DownloadingScreen`). Treat the entry below as historical context only.
 
 ### Replace "Pick a Chef" empty state with auto-download + greeting flow
 

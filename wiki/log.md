@@ -702,3 +702,29 @@ intentionally reversed by this pivot; mobile CLAUDE.md + `privacy-invariant`
 wiki page still describe the old posture and need updating. Per-conversation
 language override + cross-device offline mirror are SQLite-only gaps logged in
 mobile-needs.md.
+
+## 2026-06-18 — Pulled pivot to main + refreshed stale task docs
+
+Fast-forwarded `main` `7203e08..777e51e` (PRs #31 backend-chat pivot + #32
+pivot + nav scaffold; +3917/−6628 across 89 files). Reconciled deps
+(`pnpm install --frozen-lockfile`, +44/−151 — removed the on-device inference
+packages, added backend-chat deps); `tsc` clean, `pnpm test` **194/32 green**.
+
+Refreshed the two task-tracking docs, which still described the deleted
+on-device world:
+
+- **`wiki/synthesis/in-flight.md`** — body rewritten from the v1.3-launch /
+  on-device state to the merged-pivot state. New Status reflects pivot +
+  nav-scaffold on `main`; the two open pivot items (on-device smoke test +
+  privacy-doc reversal) are the headline; v1.3 launch + retired on-device
+  inference (incl. the Vulkan vision rerun) moved to a "Historical" section.
+  Added a "known gaps" section (language override SQLite-only; partial
+  cross-device mirror; `mobile-needs.md` referenced-but-absent).
+- **`tasks/todo.md`** — added a 2026-06-18 status banner with the four live
+  priorities; quarantined the obsolete entries inline (llama.rn integration,
+  model-CDN download, first-launch download screen = OBSOLETE; zero-knowledge
+  encrypted backup, metadata-only `/api/conversations/sync` = SUPERSEDED;
+  Google Sign-In = DONE at v1.3). Content preserved with reasons, not deleted.
+
+No code touched. Privacy-invariant doc reversal (CLAUDE.md + `privacy-invariant`
+wiki page) deliberately left for a dedicated pass — flagged as live priority #1.
