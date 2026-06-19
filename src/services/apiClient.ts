@@ -254,6 +254,10 @@ export const apiClient = {
     return request<T>(path, { ...options, method: 'POST', body });
   },
 
+  patch<T>(path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
+    return request<T>(path, { ...options, method: 'PATCH', body });
+  },
+
   del<T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) {
     return request<T>(path, { ...options, method: 'DELETE' });
   },
