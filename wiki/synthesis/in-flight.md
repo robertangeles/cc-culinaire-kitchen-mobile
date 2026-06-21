@@ -2,13 +2,23 @@
 title: In flight — what's being worked on right now
 category: synthesis
 created: 2026-04-29
-updated: 2026-06-18
+updated: 2026-06-19
 related: [[project-status]], [[privacy-invariant]], [[screens]], [[on-device-inference]]
 ---
 
 The single source of truth for "where we are right now". Updated at the end of every session and read at the start of every new one. Always short.
 
 > **Read this FIRST in any new session, before `index.md` or anything else.** It tells you what to pick up.
+
+## Active feature — Suppliers (Phase 1 base) · branch `feature/ck-mob/suppliers-base`
+
+Building **Purchasing → Suppliers** on mobile — the first real feature filling
+the Kitchen scaffold. Plan: [`docs/specs/purchasing-suppliers-mobile.md`](../../docs/specs/purchasing-suppliers-mobile.md).
+**Phase 0 is CLOSED** (backend read-gating fixed + live-verified). The **Phase 1
+base data + state layer is committed** (`4704414`); the **UI layer is the next
+chunk and is not yet started.** Suppliers is a non-AI read feature, so it stays
+legitimately under the Kitchen food-safety-ack bypass (no Antoine output).
+Details in "Last completed" + "Next action" below and the `tasks/todo.md` banner.
 
 ## Status
 
@@ -32,36 +42,52 @@ same release. Full detail: [`docs/architecture/backend-chat.md`](../../docs/arch
    2026-06-15). Mobile `CLAUDE.md` privacy rules and `wiki/concepts/privacy-invariant.md`
    still describe the old posture and must be rewritten to match.
 
-## Last completed (2026-06-18)
+## Last completed (2026-06-19)
 
-- **Pulled the pivot to `main`** (`7203e08..777e51e`, fast-forward; +3917/−6628
-  across 89 files), reconciled dependencies (`pnpm install --frozen-lockfile`,
-  +44/−151), confirmed `tsc` clean and `pnpm test` **194/32 green**.
-- **Refreshed the stale task docs** (this page body + `tasks/todo.md`) to match
-  the merged pivot — the on-device inference / model-download / encrypted-backup
-  entries were describing deleted code and have been quarantined as obsolete.
+- **Suppliers Phase 0 — CLOSED.** `GET /api/inventory/suppliers` was 403 for
+  normal users: the supplier _read_ routes were mis-gated on `inventory:manage`
+  (write tier) while every sibling inventory read sits on `inventory:count`.
+  Coordinated the fix with the web session via `mobile-needs.md`; they shipped
+  the `inventory:count` re-gate (web PR #28, prod `c1776fd`). Live-verified:
+  `GET /suppliers` → 200, `/suppliers/:id/locations` → 200, writes still 403,
+  no-org → 400. Sign-off + full contract review in
+  `../cc-culinaire-shared-context/mobile-needs.md` [2026-06-19].
+- **Suppliers Phase 1 base — data + state layer committed** (`4704414`):
+  `apiClient.patch()`, `src/types/supplier.ts`, `suppliersService.ts`
+  (list/update + `isNoOrganisationError`), `suppliersStore.ts` (status machine:
+  idle/loading/ready/no-org/error + edit-replace), `useSuppliers.ts` (edit gated
+  on `inventory:manage`; client-side `getSupplier`). 13 new tests; full suite
+  **207/207 green**; tsc clean. Backend-only — the SQLite read mirror is the
+  separate E1 PR.
+- (2026-06-18, prior milestone) Pulled the backend-chat pivot to `main` — see
+  Status above.
 
 ## Currently in flight
 
-- The two pivot open-items above (device smoke test + privacy doc reversal) —
-  neither started.
-- **Nav-scaffold follow-up, P1:** re-gate the per-session food-safety ack for
-  any Kitchen route that becomes AI-backed. The scaffold bypasses the ack for
-  `(tabs)/kitchen` because placeholders carry no Antoine content; that breaks
-  the moment a Kitchen screen produces culinary output. Bypass lives in
-  `app/_layout.tsx` RouteGuard. (Detail in `tasks/todo.md`.)
+- **Suppliers Phase 1 UI layer** (`feature/ck-mob/suppliers-base`, NOT started):
+  list screen, detail (client-side pick — no `GET /suppliers/:id`), narrow edit
+  sheet (`{contactName, contactEmail, contactPhone, notes}`, online-only, shown
+  only when the token holds `inventory:manage`), tap-to-call/email/maps. Must
+  honor Paper/Ink/Copper (`CopperButton`/`TextField`/theme tokens,
+  `@gorhom/bottom-sheet`, `FadeInDown`). Then: flip `kitchenNav` purchasing →
+  live + KitchenHub status-aware push, component/contract tests, device verify.
+- **Two pivot open-items** (still open, lower priority): on-device chat smoke
+  test + privacy-posture doc reversal.
 
 ## Next action — recommended sequence
 
-1. **Rewrite the privacy posture docs** (CLAUDE.md privacy section +
-   `privacy-invariant` wiki page) to reflect backend persistence — no device or
-   backend needed, so it unblocks immediately.
-2. **On-device smoke test** of the chat flow on the Moto G86 against the live
-   backend — the only remaining gate on calling the pivot fully done.
-3. **react-native-iap billing** — still the real monetization gap (see todo.md
-   P1). Paywall does not exist yet.
-4. **Kitchen scaffold → first real AI-backed screen**, at which point the
-   food-safety ack re-gate (P1) becomes a hard blocker.
+1. **Build the Suppliers UI** on `feature/ck-mob/suppliers-base` — list → detail
+   → edit sheet → tap-actions, matching the design system. The data/state/hook
+   layer underneath is done and tested (`4704414`).
+2. **Flip `kitchenNav` purchasing → live** + KitchenHub status-aware push so the
+   hub routes into the new screens.
+3. **Component + contract tests**, then **on-device verify on the Moto G86**
+   (the mandated gate — and where we finally observe the real Subscriber-tier
+   200 end-to-end).
+4. **Privacy-posture doc reversal** (CLAUDE.md privacy section +
+   `privacy-invariant` wiki) — no device needed; still outstanding from the pivot.
+5. **react-native-iap billing** — the real monetization gap; paywall does not
+   exist yet.
 
 ## Open questions / known gaps
 

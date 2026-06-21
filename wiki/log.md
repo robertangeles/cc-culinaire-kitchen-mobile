@@ -728,3 +728,44 @@ on-device world:
 
 No code touched. Privacy-invariant doc reversal (CLAUDE.md + `privacy-invariant`
 wiki page) deliberately left for a dedicated pass — flagged as live priority #1.
+
+---
+
+## 2026-06-19 — Suppliers Phase 0 (closed) + Phase 1 base data/state layer
+
+First real Kitchen feature kicked off on branch `feature/ck-mob/suppliers-base`
+(plan: `docs/specs/purchasing-suppliers-mobile.md`).
+
+**Phase 0 — spike + backend dependency, CLOSED.** Proved `GET /api/inventory/suppliers`
+returned 403 for normal mobile users. Root cause (code-verified in the web repo):
+the supplier _read_ routes were gated on `inventory:manage` (the write/admin tier)
+while every sibling inventory read sits on `inventory:count`. The user framed the
+fix correctly — web + mobile share one backend, so rules must be defined by what
+the user is, not which client. Coordinated via shared-context `mobile-needs.md`;
+the web session shipped the simple `inventory:count` re-gate (their PR #28, prod
+`c1776fd`) rather than a new `inventory:view` tier. Live-verified against prod
+(logged in, decoded the JWT permissions claim): `GET /suppliers` → 200 (5 rows),
+`/suppliers/:id/locations` → 200, writes still 403, no-org → 400. Caveat recorded:
+the verifying token was Admin/manage-tier, so the Subscriber-tier 403→200 is
+backed by code + the web's automated test, not a direct observation. Reviewed the
+contract against the real handlers and flagged pre-existing behaviours (list is
+active-only; `activeInd` not PATCHable; edit needs `inventory:manage`); all folded
+into api-contracts.md Endpoint I.
+
+**Phase 1 base — data + state layer committed** (`4704414`):
+
+- `apiClient.patch<T>()` (first PATCH consumer in the app).
+- `src/types/supplier.ts` — mirrors Endpoint I field names verbatim.
+- `src/services/suppliersService.ts` — `listSuppliers` + `updateSupplier`
+  (Bearer) + `isNoOrganisationError`.
+- `src/store/suppliersStore.ts` — status machine (idle/loading/ready/no-org/
+  error) + in-place edit-replace (keeps the form dirty on failure).
+- `src/hooks/useSuppliers.ts` — screen-facing wrapper; edit gated on
+  `inventory:manage`; client-side `getSupplier` (no `GET /suppliers/:id`).
+- 13 new unit tests; full suite **207/207 green**; tsc clean.
+
+Backend-only — the SQLite read mirror is the separate E1 stacked PR. **Next:**
+the UI layer (list / detail / edit sheet / tap-actions), `kitchenNav` flip +
+KitchenHub status-aware push, component/contract tests, then the on-device
+verify on the Moto G86. Where-we-left-off is the `feature/ck-mob/suppliers-base`
+branch with the data/state foundation done.

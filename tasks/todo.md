@@ -6,18 +6,37 @@ Context** / **Effort** / **Depends on**.
 
 ---
 
+## ⚡ Active — Suppliers (Phase 1 base), branch `feature/ck-mob/suppliers-base` (2026-06-19)
+
+First real Kitchen feature. Plan: `docs/specs/purchasing-suppliers-mobile.md`.
+
+- **Phase 0 — DONE/CLOSED.** Backend supplier reads were mis-gated on
+  `inventory:manage`; web shipped the `inventory:count` re-gate (their PR #28,
+  prod `c1776fd`), live-verified 200. Sign-off in shared-context `mobile-needs.md`.
+- **Phase 1 base, data + state — DONE** (commit `4704414`): `apiClient.patch()`,
+  `types/supplier.ts`, `suppliersService.ts`, `suppliersStore.ts`,
+  `useSuppliers.ts` + 13 tests; full suite 207 green; tsc clean.
+- **NEXT (not started):** the UI layer — list, detail (client-side pick), edit
+  sheet (`{contactName, contactEmail, contactPhone, notes}`, edit shown only for
+  `inventory:manage`), tap-to-call/email/maps → then flip `kitchenNav`
+  purchasing → live + KitchenHub push → component/contract tests → **device
+  verify on the Moto G86.** (SQLite read mirror = separate E1 PR, later.)
+
+---
+
 ## ⚠️ Status — refreshed 2026-06-18 after the backend-chat pivot (`777e51e`)
 
 The pivot retired on-device inference. Several entries below describe **deleted
 code** and are quarantined under "Obsolete after the backend-chat pivot" at the
 bottom — do not re-open them. The live priorities are:
 
-1. **Rewrite the privacy posture docs** — CLAUDE.md privacy section +
+1. **Suppliers Phase 1 UI** (see "Active" banner above) — the current focus.
+2. **Rewrite the privacy posture docs** — CLAUDE.md privacy section +
    `wiki/concepts/privacy-invariant.md` still claim "content never leaves the
    device"; the pivot reversed that. (No code; unblocks immediately.)
-2. **On-device smoke test** of the backend chat flow on the Moto G86.
-3. **react-native-iap billing** (P1 below) — still the real monetization gap.
-4. **Nav-scaffold P1** — re-gate the food-safety ack for AI-backed Kitchen
+3. **On-device smoke test** of the backend chat flow on the Moto G86.
+4. **react-native-iap billing** (P1 below) — still the real monetization gap.
+5. **Nav-scaffold P1** — re-gate the food-safety ack for AI-backed Kitchen
    screens (bottom section, "From CEO review — mobile nav scaffold").
 
 Detail in [`docs/architecture/backend-chat.md`](../docs/architecture/backend-chat.md)
